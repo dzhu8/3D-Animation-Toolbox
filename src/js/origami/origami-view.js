@@ -5,6 +5,25 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 // Use global THREE object instead of imports
 let scene, camera, renderer, controls;
 let crane = null;
+let currentMaterial = null;
+
+// Material definitions
+const materials = {
+    paper: {
+        name: 'Paper (White)',
+        create: () => new THREE.MeshLambertMaterial({ 
+            color: 0xffffff,
+            side: THREE.DoubleSide
+        })
+    },
+    toonPaper: {
+        name: 'Toon Paper (White)',
+        create: () => new THREE.MeshToonMaterial({ 
+            color: 0xffffff,
+            side: THREE.DoubleSide
+        })
+    }
+};
 
 function initOrigamiViewer() {
     const container = document.getElementById('container');
@@ -46,6 +65,9 @@ function initOrigamiViewer() {
     // Load the crane model
     loadCraneModel();
 
+    // Setup material selector
+    setupMaterialSelector();
+
     // Handle window resize
     window.addEventListener('resize', onWindowResize, false);
 
@@ -55,7 +77,7 @@ function initOrigamiViewer() {
 
 function setupLighting() {
     // Ambient light for overall illumination
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xf8f8ff, 0.6);
     scene.add(ambientLight);
 
     // Main directional light (sun-like)
@@ -69,7 +91,7 @@ function setupLighting() {
     scene.add(directionalLight);
 
     // Fill light from the opposite side
-    const fillLight = new THREE.DirectionalLight(0x87ceeb, 0.3);
+    const fillLight = new THREE.DirectionalLight(0xf8f8ff, 0.3);
     fillLight.position.set(-5, 3, -5);
     scene.add(fillLight);
 
@@ -77,6 +99,40 @@ function setupLighting() {
     const pointLight = new THREE.PointLight(0xffffff, 0.5, 100);
     pointLight.position.set(0, 10, 0);
     scene.add(pointLight);
+}
+
+function setupMaterialSelector() {
+    const dropdown = document.getElementById('material-dropdown');
+    dropdown.addEventListener('change', function(event) {
+        const selectedMaterial = event.target.value;
+        changeMaterial(selectedMaterial);
+    });
+}
+
+function changeMaterial(materialType) {
+    if (!crane || !materials[materialType]) {
+        console.warn('Crane not loaded or invalid material type:', materialType);
+        return;
+    }
+
+    // Dispose of the current material if it exists
+    if (currentMaterial) {
+        currentMaterial.dispose();
+    }
+
+    // Create the new material
+    currentMaterial = materials[materialType].create();
+    
+    // Apply the new material to all meshes in the crane
+    crane.traverse(function (child) {
+        if (child.isMesh) {
+            child.material = currentMaterial;
+            child.castShadow = true;
+            child.receiveShadow = true;
+        }
+    });
+
+    console.log(`Material changed to: ${materials[materialType].name}`);
 }
 
 function loadCraneModel() {
@@ -89,19 +145,8 @@ function loadCraneModel() {
             // Model loaded successfully
             crane = object;
             
-            // Apply material to the crane
-            const material = new THREE.MeshLambertMaterial({ 
-                color: 0xffffff,
-                side: THREE.DoubleSide
-            });
-            
-            object.traverse(function (child) {
-                if (child.isMesh) {
-                    child.material = material;
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                }
-            });
+            // Apply default material (paper)
+            changeMaterial('paper');
 
             // Center and scale the model
             const box = new THREE.Box3().setFromObject(object);
