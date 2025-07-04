@@ -11,7 +11,7 @@ let currentMaterial = null;
 const materials = {
     paper: {
         name: 'Paper (White)',
-        create: () => new THREE.MeshLambertMaterial({ 
+        create: () => new THREE.MeshBasicMaterial({ 
             color: 0xffffff,
             side: THREE.DoubleSide
         })
@@ -115,6 +115,15 @@ function changeMaterial(materialType) {
         return;
     }
 
+    // Remove any existing edge wireframes
+    const edgeObjects = [];
+    crane.traverse(function(child) {
+        if (child.userData.isEdgeWireframe) {
+            edgeObjects.push(child);
+        }
+    });
+    edgeObjects.forEach(edge => crane.remove(edge));
+
     // Dispose of the current material if it exists
     if (currentMaterial) {
         currentMaterial.dispose();
@@ -129,6 +138,21 @@ function changeMaterial(materialType) {
             child.material = currentMaterial;
             child.castShadow = true;
             child.receiveShadow = true;
+
+            // Add black wireframe edges for both material types
+            const edges = new THREE.EdgesGeometry(child.geometry);
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+            const wireframe = new THREE.LineSegments(edges, lineMaterial);
+            
+            // Mark this as an edge wireframe for cleanup
+            wireframe.userData.isEdgeWireframe = true;
+            
+            // Position the wireframe exactly on the mesh
+            wireframe.position.copy(child.position);
+            wireframe.rotation.copy(child.rotation);
+            wireframe.scale.copy(child.scale);
+            
+            crane.add(wireframe);
         }
     });
 
