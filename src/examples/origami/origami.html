@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Origami Crane</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: white;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            max-width: 300px;
+            z-index: 100;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 8px;
+            display: block;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "../../build/three.module.js",
+                "three/addons/": "../../jsm/"
+            }
+        }
+    </script>
+
+    <div id="container"></div>
+    
+    <div id="info">
+        <h3>3D Origami Crane</h3>
+        <p><strong>Controls:</strong></p>
+        <ul>
+            <li>Left mouse: Rotate</li>
+            <li>Right mouse: Pan</li>
+            <li>Scroll: Zoom</li>
+        </ul>
+    </div>
+    
+    <div id="loading">Loading 3D model...</div>
+
+    <!-- Load our custom origami viewer script as ES6 module -->
+    <script type="module" src="../../js/origami/origami-view.js"></script>
+</body>
+</html>
