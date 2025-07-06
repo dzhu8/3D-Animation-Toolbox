@@ -41,26 +41,52 @@
             z-index: 100;
         }
         
-        #material-selector label {
+        #material-selector {
             color: white;
             font-size: 14px;
-            margin-bottom: 8px;
-            display: block;
+            text-align: center;
         }
         
-        #material-dropdown {
-            padding: 8px 12px;
+        #animation-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 100;
+        }
+        
+        #wing-flap-button {
+            padding: 10px 20px;
             border: none;
             border-radius: 4px;
-            background: white;
-            color: #333;
+            background: #4CAF50;
+            color: white;
             font-size: 14px;
             cursor: pointer;
-            min-width: 150px;
+            margin-bottom: 10px;
+            display: block;
+            width: 100%;
         }
         
-        #material-dropdown:focus {
-            outline: 2px solid #4CAF50;
+        #wing-flap-button:hover {
+            background: #45a049;
+        }
+        
+        #wing-flap-button:active {
+            background: #3d8b40;
+        }
+        
+        #animation-info {
+            color: white;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        
+        #face-count {
+            color: #4CAF50;
+            font-weight: bold;
         }
         
         #loading {
@@ -104,11 +130,14 @@
     </div>
     
     <div id="material-selector">
-        <label for="material-dropdown">Material:</label>
-        <select id="material-dropdown">
-            <option value="paper">Paper (White)</option>
-            <option value="toonPaper">Toon Paper (White)</option>
-        </select>
+        <strong>Materials: Stay Tuned!</strong>
+    </div>
+    
+    <div id="animation-controls">
+        <button id="wing-flap-button">Start Wing Flap</button>
+        <div id="animation-info">
+            Click to animate the crane's wings
+        </div>
     </div>
     
     <div id="loading">Loading 3D model...</div>
