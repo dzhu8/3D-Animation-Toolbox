@@ -1,10 +1,5 @@
-import {
-	QuadMesh,
-	NodeMaterial,
-	WebGPURenderer,
-	CanvasTexture
-} from 'three';
-import { texture, uv } from 'three/tsl';
+import { QuadMesh, NodeMaterial, WebGPURenderer, CanvasTexture } from "three";
+import { texture, uv } from "three/tsl";
 
 /**
  * @module WebGPUTextureUtils
@@ -26,56 +21,50 @@ const _quadMesh = /*@__PURE__*/ new QuadMesh();
  * @param {?WebGPURenderer} [renderer=null] - A reference to a renderer.
  * @return {Promise<CanvasTexture>} A Promise that resolved with the uncompressed texture.
  */
-export async function decompress( blitTexture, maxTextureSize = Infinity, renderer = null ) {
+export async function decompress(blitTexture, maxTextureSize = Infinity, renderer = null) {
+     if (renderer === null) {
+          renderer = _renderer = new WebGPURenderer();
+          await renderer.init();
+     }
 
-	if ( renderer === null ) {
+     const material = new NodeMaterial();
 
-		renderer = _renderer = new WebGPURenderer();
-		await renderer.init();
+     material.fragmentNode = texture(blitTexture, uv().flipY());
 
-	}
+     const width = Math.min(blitTexture.image.width, maxTextureSize);
+     const height = Math.min(blitTexture.image.height, maxTextureSize);
 
-	const material = new NodeMaterial();
+     const currentOutputColorSpace = renderer.outputColorSpace;
 
-	material.fragmentNode = texture( blitTexture, uv().flipY() );
+     renderer.setSize(width, height);
+     renderer.outputColorSpace = blitTexture.colorSpace;
 
-	const width = Math.min( blitTexture.image.width, maxTextureSize );
-	const height = Math.min( blitTexture.image.height, maxTextureSize );
+     _quadMesh.material = material;
+     _quadMesh.render(renderer);
 
-	const currentOutputColorSpace = renderer.outputColorSpace;
+     renderer.outputColorSpace = currentOutputColorSpace;
 
-	renderer.setSize( width, height );
-	renderer.outputColorSpace = blitTexture.colorSpace;
+     const canvas = document.createElement("canvas");
+     const context = canvas.getContext("2d");
 
-	_quadMesh.material = material;
-	_quadMesh.render( renderer );
+     canvas.width = width;
+     canvas.height = height;
 
-	renderer.outputColorSpace = currentOutputColorSpace;
+     context.drawImage(renderer.domElement, 0, 0, width, height);
 
-	const canvas = document.createElement( 'canvas' );
-	const context = canvas.getContext( '2d' );
+     const readableTexture = new CanvasTexture(canvas);
 
-	canvas.width = width;
-	canvas.height = height;
+     readableTexture.minFilter = blitTexture.minFilter;
+     readableTexture.magFilter = blitTexture.magFilter;
+     readableTexture.wrapS = blitTexture.wrapS;
+     readableTexture.wrapT = blitTexture.wrapT;
+     readableTexture.colorSpace = blitTexture.colorSpace;
+     readableTexture.name = blitTexture.name;
 
-	context.drawImage( renderer.domElement, 0, 0, width, height );
+     if (_renderer !== null) {
+          _renderer.dispose();
+          _renderer = null;
+     }
 
-	const readableTexture = new CanvasTexture( canvas );
-
-	readableTexture.minFilter = blitTexture.minFilter;
-	readableTexture.magFilter = blitTexture.magFilter;
-	readableTexture.wrapS = blitTexture.wrapS;
-	readableTexture.wrapT = blitTexture.wrapT;
-	readableTexture.colorSpace = blitTexture.colorSpace;
-	readableTexture.name = blitTexture.name;
-
-	if ( _renderer !== null ) {
-
-		_renderer.dispose();
-		_renderer = null;
-
-	}
-
-	return readableTexture;
-
+     return readableTexture;
 }

@@ -1,10 +1,4 @@
-import {
-	BufferGeometry,
-	BufferAttribute,
-	LineBasicMaterial,
-	Line,
-	MathUtils
-} from 'three';
+import { BufferGeometry, BufferAttribute, LineBasicMaterial, Line, MathUtils } from "three";
 
 /**
  * This helper displays the directional cone of a positional audio.
@@ -12,158 +6,149 @@ import {
  * `PositionalAudioHelper` must be added as a child of the positional audio.
  *
  * ```js
- * const positionalAudio = new THREE.PositionalAudio( listener );
- * positionalAudio.setDirectionalCone( 180, 230, 0.1 );
- * scene.add( positionalAudio );
+ * const positionalAudio = new THREE.PositionalAudio(listener);
+ * positionalAudio.setDirectionalCone(180, 230, 0.1);
+ * scene.add(positionalAudio);
  *
- * const helper = new PositionalAudioHelper( positionalAudio );
- * positionalAudio.add( helper );
+ * const helper = new PositionalAudioHelper(positionalAudio);
+ * positionalAudio.add(helper);
  * ```
  *
  * @augments Line
  * @three_import import { PositionalAudioHelper } from 'three/addons/helpers/PositionalAudioHelper.js';
  */
 class PositionalAudioHelper extends Line {
+     /**
+      * Constructs a new positional audio helper.
+      *
+      * @param {PositionalAudio} audio - The audio to visualize.
+      * @param {number} [range=1] - The range of the directional cone. Default is `1`
+      * @param {number} [divisionsInnerAngle=16] - The number of divisions of the inner part of the directional cone.
+      *   Default is `16`
+      * @param {number} [divisionsOuterAngle=2] The number of divisions of the outer part of the directional cone.
+      *   Default is `2`
+      */
+     constructor(audio, range = 1, divisionsInnerAngle = 16, divisionsOuterAngle = 2) {
+          const geometry = new BufferGeometry();
+          const divisions = divisionsInnerAngle + divisionsOuterAngle * 2;
+          const positions = new Float32Array((divisions * 3 + 3) * 3);
+          geometry.setAttribute("position", new BufferAttribute(positions, 3));
 
-	/**
-	 * Constructs a new positional audio helper.
-	 *
-	 * @param {PositionalAudio} audio - The audio to visualize.
-	 * @param {number} [range=1] - The range of the directional cone.
-	 * @param {number} [divisionsInnerAngle=16] - The number of divisions of the inner part of the directional cone.
-	 * @param {number} [divisionsOuterAngle=2] The number of divisions of the outer part of the directional cone.
-	 */
-	constructor( audio, range = 1, divisionsInnerAngle = 16, divisionsOuterAngle = 2 ) {
+          const materialInnerAngle = new LineBasicMaterial({ color: 0x00ff00 });
+          const materialOuterAngle = new LineBasicMaterial({ color: 0xffff00 });
 
-		const geometry = new BufferGeometry();
-		const divisions = divisionsInnerAngle + divisionsOuterAngle * 2;
-		const positions = new Float32Array( ( divisions * 3 + 3 ) * 3 );
-		geometry.setAttribute( 'position', new BufferAttribute( positions, 3 ) );
+          super(geometry, [materialOuterAngle, materialInnerAngle]);
 
-		const materialInnerAngle = new LineBasicMaterial( { color: 0x00ff00 } );
-		const materialOuterAngle = new LineBasicMaterial( { color: 0xffff00 } );
+          /**
+           * The audio to visualize.
+           *
+           * @type {PositionalAudio}
+           */
+          this.audio = audio;
 
-		super( geometry, [ materialOuterAngle, materialInnerAngle ] );
+          /**
+           * The range of the directional cone.
+           *
+           * @default 1
+           * @type {number}
+           */
+          this.range = range;
 
-		/**
-		 * The audio to visualize.
-		 *
-		 * @type {PositionalAudio}
-		 */
-		this.audio = audio;
+          /**
+           * The number of divisions of the inner part of the directional cone.
+           *
+           * @default 16
+           * @type {number}
+           */
+          this.divisionsInnerAngle = divisionsInnerAngle;
 
-		/**
-		 * The range of the directional cone.
-		 *
-		 * @type {number}
-		 * @default 1
-		 */
-		this.range = range;
+          /**
+           * The number of divisions of the outer part of the directional cone.
+           *
+           * @default 2
+           * @type {number}
+           */
+          this.divisionsOuterAngle = divisionsOuterAngle;
 
-		/**
-		 * The number of divisions of the inner part of the directional cone.
-		 *
-		 * @type {number}
-		 * @default 16
-		 */
-		this.divisionsInnerAngle = divisionsInnerAngle;
+          this.type = "PositionalAudioHelper";
 
-		/**
-		 * The number of divisions of the outer part of the directional cone.
-		 *
-		 * @type {number}
-		 * @default 2
-		 */
-		this.divisionsOuterAngle = divisionsOuterAngle;
+          this.update();
+     }
 
-		this.type = 'PositionalAudioHelper';
+     /** Updates the helper. This method must be called whenever the directional cone of the positional audio is changed. */
+     update() {
+          const audio = this.audio;
+          const range = this.range;
+          const divisionsInnerAngle = this.divisionsInnerAngle;
+          const divisionsOuterAngle = this.divisionsOuterAngle;
 
-		this.update();
+          const coneInnerAngle = MathUtils.degToRad(audio.panner.coneInnerAngle);
+          const coneOuterAngle = MathUtils.degToRad(audio.panner.coneOuterAngle);
 
-	}
+          const halfConeInnerAngle = coneInnerAngle / 2;
+          const halfConeOuterAngle = coneOuterAngle / 2;
 
-	/**
-	 * Updates the helper. This method must be called whenever the directional cone
-	 * of the positional audio is changed.
-	 */
-	update() {
+          let start = 0;
+          let count = 0;
+          let i;
+          let stride;
 
-		const audio = this.audio;
-		const range = this.range;
-		const divisionsInnerAngle = this.divisionsInnerAngle;
-		const divisionsOuterAngle = this.divisionsOuterAngle;
+          const geometry = this.geometry;
+          const positionAttribute = geometry.attributes.position;
 
-		const coneInnerAngle = MathUtils.degToRad( audio.panner.coneInnerAngle );
-		const coneOuterAngle = MathUtils.degToRad( audio.panner.coneOuterAngle );
+          geometry.clearGroups();
 
-		const halfConeInnerAngle = coneInnerAngle / 2;
-		const halfConeOuterAngle = coneOuterAngle / 2;
+          //
 
-		let start = 0;
-		let count = 0;
-		let i;
-		let stride;
+          function generateSegment(from, to, divisions, materialIndex) {
+               const step = (to - from) / divisions;
 
-		const geometry = this.geometry;
-		const positionAttribute = geometry.attributes.position;
+               positionAttribute.setXYZ(start, 0, 0, 0);
+               count++;
 
-		geometry.clearGroups();
+               for (i = from; i < to; i += step) {
+                    stride = start + count;
 
-		//
+                    positionAttribute.setXYZ(stride, Math.sin(i) * range, 0, Math.cos(i) * range);
+                    positionAttribute.setXYZ(
+                         stride + 1,
+                         Math.sin(Math.min(i + step, to)) * range,
+                         0,
+                         Math.cos(Math.min(i + step, to)) * range
+                    );
+                    positionAttribute.setXYZ(stride + 2, 0, 0, 0);
 
-		function generateSegment( from, to, divisions, materialIndex ) {
+                    count += 3;
+               }
 
-			const step = ( to - from ) / divisions;
+               geometry.addGroup(start, count, materialIndex);
 
-			positionAttribute.setXYZ( start, 0, 0, 0 );
-			count ++;
+               start += count;
+               count = 0;
+          }
 
-			for ( i = from; i < to; i += step ) {
+          //
 
-				stride = start + count;
+          generateSegment(-halfConeOuterAngle, -halfConeInnerAngle, divisionsOuterAngle, 0);
+          generateSegment(-halfConeInnerAngle, halfConeInnerAngle, divisionsInnerAngle, 1);
+          generateSegment(halfConeInnerAngle, halfConeOuterAngle, divisionsOuterAngle, 0);
 
-				positionAttribute.setXYZ( stride, Math.sin( i ) * range, 0, Math.cos( i ) * range );
-				positionAttribute.setXYZ( stride + 1, Math.sin( Math.min( i + step, to ) ) * range, 0, Math.cos( Math.min( i + step, to ) ) * range );
-				positionAttribute.setXYZ( stride + 2, 0, 0, 0 );
+          //
 
-				count += 3;
+          positionAttribute.needsUpdate = true;
 
-			}
+          if (coneInnerAngle === coneOuterAngle) this.material[0].visible = false;
+     }
 
-			geometry.addGroup( start, count, materialIndex );
-
-			start += count;
-			count = 0;
-
-		}
-
-		//
-
-		generateSegment( - halfConeOuterAngle, - halfConeInnerAngle, divisionsOuterAngle, 0 );
-		generateSegment( - halfConeInnerAngle, halfConeInnerAngle, divisionsInnerAngle, 1 );
-		generateSegment( halfConeInnerAngle, halfConeOuterAngle, divisionsOuterAngle, 0 );
-
-		//
-
-		positionAttribute.needsUpdate = true;
-
-		if ( coneInnerAngle === coneOuterAngle ) this.material[ 0 ].visible = false;
-
-	}
-
-	/**
-	 * Frees the GPU-related resources allocated by this instance. Call this
-	 * method whenever this instance is no longer used in your app.
-	 */
-	dispose() {
-
-		this.geometry.dispose();
-		this.material[ 0 ].dispose();
-		this.material[ 1 ].dispose();
-
-	}
-
+     /**
+      * Frees the GPU-related resources allocated by this instance. Call this method whenever this instance is no longer
+      * used in your app.
+      */
+     dispose() {
+          this.geometry.dispose();
+          this.material[0].dispose();
+          this.material[1].dispose();
+     }
 }
-
 
 export { PositionalAudioHelper };

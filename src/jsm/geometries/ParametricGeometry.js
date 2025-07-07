@@ -1,8 +1,4 @@
-import {
-	BufferGeometry,
-	Float32BufferAttribute,
-	Vector3
-} from 'three';
+import { BufferGeometry, Float32BufferAttribute, Vector3 } from "three";
 
 /**
  * This class can be used to generate a geometry based on a parametric surface.
@@ -10,154 +6,134 @@ import {
  * Reference: [Mesh Generation with Python]{@link https://prideout.net/blog/old/blog/index.html@p=44.html}
  *
  * ```js
- * const geometry = new THREE.ParametricGeometry( klein, 25, 25 );
- * const material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
- * const klein = new THREE.Mesh( geometry, material );
- * scene.add( klein );
+ * const geometry = new THREE.ParametricGeometry(klein, 25, 25);
+ * const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+ * const klein = new THREE.Mesh(geometry, material);
+ * scene.add(klein);
  * ```
  *
  * @augments BufferGeometry
  * @three_import import { ParametricGeometry } from 'three/addons/geometries/ParametricGeometry.js';
  */
 class ParametricGeometry extends BufferGeometry {
+     /**
+      * Constructs a new parametric geometry.
+      *
+      * @param {ParametricGeometry~Func} func - The parametric function. Default is a function that generates a curved
+      *   plane surface.
+      * @param {number} [slices=8] - The number of slices to use for the parametric function. Default is `8`
+      * @param {number} [stacks=8] - The stacks of slices to use for the parametric function. Default is `8`
+      */
+     constructor(func = (u, v, target) => target.set(u, v, Math.cos(u) * Math.sin(v)), slices = 8, stacks = 8) {
+          super();
 
-	/**
-	 * Constructs a new parametric geometry.
-	 *
-	 * @param {ParametricGeometry~Func} func - The parametric function. Default is a function that generates a curved plane surface.
-	 * @param {number} [slices=8] - The number of slices to use for the parametric function.
-	 * @param {number} [stacks=8] - The stacks of slices to use for the parametric function.
-	 */
-	constructor( func = ( u, v, target ) => target.set( u, v, Math.cos( u ) * Math.sin( v ) ), slices = 8, stacks = 8 ) {
+          this.type = "ParametricGeometry";
 
-		super();
+          /**
+           * Holds the constructor parameters that have been used to generate the geometry. Any modification after
+           * instantiation does not change the geometry.
+           *
+           * @type {Object}
+           */
+          this.parameters = {
+               func: func,
+               slices: slices,
+               stacks: stacks,
+          };
 
-		this.type = 'ParametricGeometry';
+          // buffers
 
-		/**
-		 * Holds the constructor parameters that have been
-		 * used to generate the geometry. Any modification
-		 * after instantiation does not change the geometry.
-		 *
-		 * @type {Object}
-		 */
-		this.parameters = {
-			func: func,
-			slices: slices,
-			stacks: stacks
-		};
+          const indices = [];
+          const vertices = [];
+          const normals = [];
+          const uvs = [];
 
-		// buffers
+          const EPS = 0.00001;
 
-		const indices = [];
-		const vertices = [];
-		const normals = [];
-		const uvs = [];
+          const normal = new Vector3();
 
-		const EPS = 0.00001;
+          const p0 = new Vector3(),
+               p1 = new Vector3();
+          const pu = new Vector3(),
+               pv = new Vector3();
 
-		const normal = new Vector3();
+          // generate vertices, normals and uvs
 
-		const p0 = new Vector3(), p1 = new Vector3();
-		const pu = new Vector3(), pv = new Vector3();
+          const sliceCount = slices + 1;
 
-		// generate vertices, normals and uvs
+          for (let i = 0; i <= stacks; i++) {
+               const v = i / stacks;
 
-		const sliceCount = slices + 1;
+               for (let j = 0; j <= slices; j++) {
+                    const u = j / slices;
 
-		for ( let i = 0; i <= stacks; i ++ ) {
+                    // vertex
 
-			const v = i / stacks;
+                    func(u, v, p0);
+                    vertices.push(p0.x, p0.y, p0.z);
 
-			for ( let j = 0; j <= slices; j ++ ) {
+                    // normal
 
-				const u = j / slices;
+                    // approximate tangent vectors via finite differences
 
-				// vertex
+                    if (u - EPS >= 0) {
+                         func(u - EPS, v, p1);
+                         pu.subVectors(p0, p1);
+                    } else {
+                         func(u + EPS, v, p1);
+                         pu.subVectors(p1, p0);
+                    }
 
-				func( u, v, p0 );
-				vertices.push( p0.x, p0.y, p0.z );
+                    if (v - EPS >= 0) {
+                         func(u, v - EPS, p1);
+                         pv.subVectors(p0, p1);
+                    } else {
+                         func(u, v + EPS, p1);
+                         pv.subVectors(p1, p0);
+                    }
 
-				// normal
+                    // cross product of tangent vectors returns surface normal
 
-				// approximate tangent vectors via finite differences
+                    normal.crossVectors(pu, pv).normalize();
+                    normals.push(normal.x, normal.y, normal.z);
 
-				if ( u - EPS >= 0 ) {
+                    // uv
 
-					func( u - EPS, v, p1 );
-					pu.subVectors( p0, p1 );
+                    uvs.push(u, v);
+               }
+          }
 
-				} else {
+          // generate indices
 
-					func( u + EPS, v, p1 );
-					pu.subVectors( p1, p0 );
+          for (let i = 0; i < stacks; i++) {
+               for (let j = 0; j < slices; j++) {
+                    const a = i * sliceCount + j;
+                    const b = i * sliceCount + j + 1;
+                    const c = (i + 1) * sliceCount + j + 1;
+                    const d = (i + 1) * sliceCount + j;
 
-				}
+                    // faces one and two
 
-				if ( v - EPS >= 0 ) {
+                    indices.push(a, b, d);
+                    indices.push(b, c, d);
+               }
+          }
 
-					func( u, v - EPS, p1 );
-					pv.subVectors( p0, p1 );
+          // build geometry
 
-				} else {
+          this.setIndex(indices);
+          this.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+          this.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+          this.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
+     }
 
-					func( u, v + EPS, p1 );
-					pv.subVectors( p1, p0 );
+     copy(source) {
+          super.copy(source);
 
-				}
+          this.parameters = Object.assign({}, source.parameters);
 
-				// cross product of tangent vectors returns surface normal
-
-				normal.crossVectors( pu, pv ).normalize();
-				normals.push( normal.x, normal.y, normal.z );
-
-				// uv
-
-				uvs.push( u, v );
-
-			}
-
-		}
-
-		// generate indices
-
-		for ( let i = 0; i < stacks; i ++ ) {
-
-			for ( let j = 0; j < slices; j ++ ) {
-
-				const a = i * sliceCount + j;
-				const b = i * sliceCount + j + 1;
-				const c = ( i + 1 ) * sliceCount + j + 1;
-				const d = ( i + 1 ) * sliceCount + j;
-
-				// faces one and two
-
-				indices.push( a, b, d );
-				indices.push( b, c, d );
-
-			}
-
-		}
-
-		// build geometry
-
-		this.setIndex( indices );
-		this.setAttribute( 'position', new Float32BufferAttribute( vertices, 3 ) );
-		this.setAttribute( 'normal', new Float32BufferAttribute( normals, 3 ) );
-		this.setAttribute( 'uv', new Float32BufferAttribute( uvs, 2 ) );
-
-	}
-
-	copy( source ) {
-
-		super.copy( source );
-
-		this.parameters = Object.assign( {}, source.parameters );
-
-		return this;
-
-	}
-
+          return this;
+     }
 }
 
 /**

@@ -10,17 +10,14 @@
  * @type {ShaderMaterial~Shader}
  */
 const SepiaShader = {
+     name: "SepiaShader",
 
-	name: 'SepiaShader',
+     uniforms: {
+          tDiffuse: { value: null },
+          amount: { value: 1.0 },
+     },
 
-	uniforms: {
-
-		'tDiffuse': { value: null },
-		'amount': { value: 1.0 }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -31,7 +28,7 @@ const SepiaShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform float amount;
 
@@ -50,8 +47,7 @@ const SepiaShader = {
 
 			gl_FragColor = vec4( min( vec3( 1.0 ), color.rgb ), color.a );
 
-		}`
-
+		}`,
 };
 
 export { SepiaShader };

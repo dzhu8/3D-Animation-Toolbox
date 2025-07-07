@@ -1,211 +1,185 @@
-import {
-	AdditiveBlending,
-	HalfFloatType,
-	ShaderMaterial,
-	UniformsUtils,
-	Vector2,
-	WebGLRenderTarget
-} from 'three';
-import { Pass, FullScreenQuad } from './Pass.js';
-import { ConvolutionShader } from '../shaders/ConvolutionShader.js';
+import { AdditiveBlending, HalfFloatType, ShaderMaterial, UniformsUtils, Vector2, WebGLRenderTarget } from "three";
+import { Pass, FullScreenQuad } from "./Pass.js";
+import { ConvolutionShader } from "../shaders/ConvolutionShader.js";
 
 /**
  * A pass for a basic Bloom effect.
  *
- * {@link UnrealBloomPass} produces a more advanced Bloom but is also
- * more expensive.
+ * {@link UnrealBloomPass} produces a more advanced Bloom but is also more expensive.
  *
  * ```js
- * const effectBloom = new BloomPass( 0.75 );
- * composer.addPass( effectBloom );
+ * const effectBloom = new BloomPass(0.75);
+ * composer.addPass(effectBloom);
  * ```
  *
  * @augments Pass
  * @three_import import { BloomPass } from 'three/addons/postprocessing/BloomPass.js';
  */
 class BloomPass extends Pass {
+     /**
+      * Constructs a new Bloom pass.
+      *
+      * @param {number} [strength=1] - The Bloom strength. Default is `1`
+      * @param {number} [kernelSize=25] - The kernel size. Default is `25`
+      * @param {number} [sigma=4] - The sigma. Default is `4`
+      */
+     constructor(strength = 1, kernelSize = 25, sigma = 4) {
+          super();
 
-	/**
-	 * Constructs a new Bloom pass.
-	 *
-	 * @param {number} [strength=1] - The Bloom strength.
-	 * @param {number} [kernelSize=25] - The kernel size.
-	 * @param {number} [sigma=4] - The sigma.
-	 */
-	constructor( strength = 1, kernelSize = 25, sigma = 4 ) {
+          // combine material
 
-		super();
+          /**
+           * The combine pass uniforms.
+           *
+           * @type {Object}
+           */
+          this.combineUniforms = UniformsUtils.clone(CombineShader.uniforms);
+          this.combineUniforms["strength"].value = strength;
 
-		// combine material
+          /**
+           * The combine pass material.
+           *
+           * @type {ShaderMaterial}
+           */
+          this.materialCombine = new ShaderMaterial({
+               name: CombineShader.name,
+               uniforms: this.combineUniforms,
+               vertexShader: CombineShader.vertexShader,
+               fragmentShader: CombineShader.fragmentShader,
+               blending: AdditiveBlending,
+               transparent: true,
+          });
 
-		/**
-		 * The combine pass uniforms.
-		 *
-		 * @type {Object}
-		 */
-		this.combineUniforms = UniformsUtils.clone( CombineShader.uniforms );
-		this.combineUniforms[ 'strength' ].value = strength;
+          // convolution material
 
-		/**
-		 * The combine pass material.
-		 *
-		 * @type {ShaderMaterial}
-		 */
-		this.materialCombine = new ShaderMaterial( {
+          const convolutionShader = ConvolutionShader;
 
-			name: CombineShader.name,
-			uniforms: this.combineUniforms,
-			vertexShader: CombineShader.vertexShader,
-			fragmentShader: CombineShader.fragmentShader,
-			blending: AdditiveBlending,
-			transparent: true
+          /**
+           * The convolution pass uniforms.
+           *
+           * @type {Object}
+           */
+          this.convolutionUniforms = UniformsUtils.clone(convolutionShader.uniforms);
 
-		} );
+          this.convolutionUniforms["uImageIncrement"].value = BloomPass.blurX;
+          this.convolutionUniforms["cKernel"].value = buildKernel(sigma);
 
-		// convolution material
+          /**
+           * The convolution pass material.
+           *
+           * @type {ShaderMaterial}
+           */
+          this.materialConvolution = new ShaderMaterial({
+               name: convolutionShader.name,
+               uniforms: this.convolutionUniforms,
+               vertexShader: convolutionShader.vertexShader,
+               fragmentShader: convolutionShader.fragmentShader,
+               defines: {
+                    KERNEL_SIZE_FLOAT: kernelSize.toFixed(1),
+                    KERNEL_SIZE_INT: kernelSize.toFixed(0),
+               },
+          });
 
-		const convolutionShader = ConvolutionShader;
+          /**
+           * Overwritten to disable the swap.
+           *
+           * @default false
+           * @type {boolean}
+           */
+          this.needsSwap = false;
 
-		/**
-		 * The convolution pass uniforms.
-		 *
-		 * @type {Object}
-		 */
-		this.convolutionUniforms = UniformsUtils.clone( convolutionShader.uniforms );
+          // internals
 
-		this.convolutionUniforms[ 'uImageIncrement' ].value = BloomPass.blurX;
-		this.convolutionUniforms[ 'cKernel' ].value = buildKernel( sigma );
+          this._renderTargetX = new WebGLRenderTarget(1, 1, { type: HalfFloatType }); // will be resized later
+          this._renderTargetX.texture.name = "BloomPass.x";
+          this._renderTargetY = new WebGLRenderTarget(1, 1, { type: HalfFloatType }); // will be resized later
+          this._renderTargetY.texture.name = "BloomPass.y";
 
-		/**
-		 * The convolution pass material.
-		 *
-		 * @type {ShaderMaterial}
-		 */
-		this.materialConvolution = new ShaderMaterial( {
+          this._fsQuad = new FullScreenQuad(null);
+     }
 
-			name: convolutionShader.name,
-			uniforms: this.convolutionUniforms,
-			vertexShader: convolutionShader.vertexShader,
-			fragmentShader: convolutionShader.fragmentShader,
-			defines: {
-				'KERNEL_SIZE_FLOAT': kernelSize.toFixed( 1 ),
-				'KERNEL_SIZE_INT': kernelSize.toFixed( 0 )
-			}
+     /**
+      * Performs the Bloom pass.
+      *
+      * @param {WebGLRenderer} renderer - The renderer.
+      * @param {WebGLRenderTarget} writeBuffer - The write buffer. This buffer is intended as the rendering destination
+      *   for the pass.
+      * @param {WebGLRenderTarget} readBuffer - The read buffer. The pass can access the result from the previous pass
+      *   from this buffer.
+      * @param {number} deltaTime - The delta time in seconds.
+      * @param {boolean} maskActive - Whether masking is active or not.
+      */
+     render(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
+          if (maskActive) renderer.state.buffers.stencil.setTest(false);
 
-		} );
+          // Render quad with blurred scene into texture (convolution pass 1)
 
-		/**
-		 * Overwritten to disable the swap.
-		 *
-		 * @type {boolean}
-		 * @default false
-		 */
-		this.needsSwap = false;
+          this._fsQuad.material = this.materialConvolution;
 
-		// internals
+          this.convolutionUniforms["tDiffuse"].value = readBuffer.texture;
+          this.convolutionUniforms["uImageIncrement"].value = BloomPass.blurX;
 
-		this._renderTargetX = new WebGLRenderTarget( 1, 1, { type: HalfFloatType } ); // will be resized later
-		this._renderTargetX.texture.name = 'BloomPass.x';
-		this._renderTargetY = new WebGLRenderTarget( 1, 1, { type: HalfFloatType } ); // will be resized later
-		this._renderTargetY.texture.name = 'BloomPass.y';
+          renderer.setRenderTarget(this._renderTargetX);
+          renderer.clear();
+          this._fsQuad.render(renderer);
 
-		this._fsQuad = new FullScreenQuad( null );
+          // Render quad with blurred scene into texture (convolution pass 2)
 
-	}
+          this.convolutionUniforms["tDiffuse"].value = this._renderTargetX.texture;
+          this.convolutionUniforms["uImageIncrement"].value = BloomPass.blurY;
 
-	/**
-	 * Performs the Bloom pass.
-	 *
-	 * @param {WebGLRenderer} renderer - The renderer.
-	 * @param {WebGLRenderTarget} writeBuffer - The write buffer. This buffer is intended as the rendering
-	 * destination for the pass.
-	 * @param {WebGLRenderTarget} readBuffer - The read buffer. The pass can access the result from the
-	 * previous pass from this buffer.
-	 * @param {number} deltaTime - The delta time in seconds.
-	 * @param {boolean} maskActive - Whether masking is active or not.
-	 */
-	render( renderer, writeBuffer, readBuffer, deltaTime, maskActive ) {
+          renderer.setRenderTarget(this._renderTargetY);
+          renderer.clear();
+          this._fsQuad.render(renderer);
 
-		if ( maskActive ) renderer.state.buffers.stencil.setTest( false );
+          // Render original scene with superimposed blur to texture
 
-		// Render quad with blurred scene into texture (convolution pass 1)
+          this._fsQuad.material = this.materialCombine;
 
-		this._fsQuad.material = this.materialConvolution;
+          this.combineUniforms["tDiffuse"].value = this._renderTargetY.texture;
 
-		this.convolutionUniforms[ 'tDiffuse' ].value = readBuffer.texture;
-		this.convolutionUniforms[ 'uImageIncrement' ].value = BloomPass.blurX;
+          if (maskActive) renderer.state.buffers.stencil.setTest(true);
 
-		renderer.setRenderTarget( this._renderTargetX );
-		renderer.clear();
-		this._fsQuad.render( renderer );
+          renderer.setRenderTarget(readBuffer);
+          if (this.clear) renderer.clear();
+          this._fsQuad.render(renderer);
+     }
 
+     /**
+      * Sets the size of the pass.
+      *
+      * @param {number} width - The width to set.
+      * @param {number} height - The height to set.
+      */
+     setSize(width, height) {
+          this._renderTargetX.setSize(width, height);
+          this._renderTargetY.setSize(width, height);
+     }
 
-		// Render quad with blurred scene into texture (convolution pass 2)
+     /**
+      * Frees the GPU-related resources allocated by this instance. Call this method whenever the pass is no longer used
+      * in your app.
+      */
+     dispose() {
+          this._renderTargetX.dispose();
+          this._renderTargetY.dispose();
 
-		this.convolutionUniforms[ 'tDiffuse' ].value = this._renderTargetX.texture;
-		this.convolutionUniforms[ 'uImageIncrement' ].value = BloomPass.blurY;
+          this.materialCombine.dispose();
+          this.materialConvolution.dispose();
 
-		renderer.setRenderTarget( this._renderTargetY );
-		renderer.clear();
-		this._fsQuad.render( renderer );
-
-		// Render original scene with superimposed blur to texture
-
-		this._fsQuad.material = this.materialCombine;
-
-		this.combineUniforms[ 'tDiffuse' ].value = this._renderTargetY.texture;
-
-		if ( maskActive ) renderer.state.buffers.stencil.setTest( true );
-
-		renderer.setRenderTarget( readBuffer );
-		if ( this.clear ) renderer.clear();
-		this._fsQuad.render( renderer );
-
-	}
-
-	/**
-	 * Sets the size of the pass.
-	 *
-	 * @param {number} width - The width to set.
-	 * @param {number} height - The height to set.
-	 */
-	setSize( width, height ) {
-
-		this._renderTargetX.setSize( width, height );
-		this._renderTargetY.setSize( width, height );
-
-	}
-
-	/**
-	 * Frees the GPU-related resources allocated by this instance. Call this
-	 * method whenever the pass is no longer used in your app.
-	 */
-	dispose() {
-
-		this._renderTargetX.dispose();
-		this._renderTargetY.dispose();
-
-		this.materialCombine.dispose();
-		this.materialConvolution.dispose();
-
-		this._fsQuad.dispose();
-
-	}
-
+          this._fsQuad.dispose();
+     }
 }
 
 const CombineShader = {
+     name: "CombineShader",
 
-	name: 'CombineShader',
+     uniforms: {
+          tDiffuse: { value: null },
+          strength: { value: 1.0 },
+     },
 
-	uniforms: {
-
-		'tDiffuse': { value: null },
-		'strength': { value: 1.0 }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -216,7 +190,7 @@ const CombineShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform float strength;
 
@@ -229,46 +203,38 @@ const CombineShader = {
 			vec4 texel = texture2D( tDiffuse, vUv );
 			gl_FragColor = strength * texel;
 
-		}`
-
+		}`,
 };
 
-BloomPass.blurX = new Vector2( 0.001953125, 0.0 );
-BloomPass.blurY = new Vector2( 0.0, 0.001953125 );
+BloomPass.blurX = new Vector2(0.001953125, 0.0);
+BloomPass.blurY = new Vector2(0.0, 0.001953125);
 
-
-function gauss( x, sigma ) {
-
-	return Math.exp( - ( x * x ) / ( 2.0 * sigma * sigma ) );
-
+function gauss(x, sigma) {
+     return Math.exp(-(x * x) / (2.0 * sigma * sigma));
 }
 
-function buildKernel( sigma ) {
+function buildKernel(sigma) {
+     // We loop off the sqrt(2 * pi) * sigma term, since we're going to normalize anyway.
 
-	// We loop off the sqrt(2 * pi) * sigma term, since we're going to normalize anyway.
+     const kMaxKernelSize = 25;
+     let kernelSize = 2 * Math.ceil(sigma * 3.0) + 1;
 
-	const kMaxKernelSize = 25;
-	let kernelSize = 2 * Math.ceil( sigma * 3.0 ) + 1;
+     if (kernelSize > kMaxKernelSize) kernelSize = kMaxKernelSize;
 
-	if ( kernelSize > kMaxKernelSize ) kernelSize = kMaxKernelSize;
+     const halfWidth = (kernelSize - 1) * 0.5;
 
-	const halfWidth = ( kernelSize - 1 ) * 0.5;
+     const values = new Array(kernelSize);
+     let sum = 0.0;
+     for (let i = 0; i < kernelSize; ++i) {
+          values[i] = gauss(i - halfWidth, sigma);
+          sum += values[i];
+     }
 
-	const values = new Array( kernelSize );
-	let sum = 0.0;
-	for ( let i = 0; i < kernelSize; ++ i ) {
+     // normalize the kernel
 
-		values[ i ] = gauss( i - halfWidth, sigma );
-		sum += values[ i ];
+     for (let i = 0; i < kernelSize; ++i) values[i] /= sum;
 
-	}
-
-	// normalize the kernel
-
-	for ( let i = 0; i < kernelSize; ++ i ) values[ i ] /= sum;
-
-	return values;
-
+     return values;
 }
 
 export { BloomPass };

@@ -1,265 +1,203 @@
-import {
-	BoxGeometry,
-	BufferAttribute,
-	DoubleSide,
-	Mesh,
-	PlaneGeometry,
-	ShaderMaterial,
-	Vector3,
-} from 'three';
-import { mergeGeometries } from '../utils/BufferGeometryUtils.js';
+import { BoxGeometry, BufferAttribute, DoubleSide, Mesh, PlaneGeometry, ShaderMaterial, Vector3 } from "three";
+import { mergeGeometries } from "../utils/BufferGeometryUtils.js";
 
 /**
- * A helper that can be used to display any type of texture for
- * debugging purposes. Depending on the type of texture (2D, 3D, Array),
- * the helper becomes a plane or box mesh.
+ * A helper that can be used to display any type of texture for debugging purposes. Depending on the type of texture
+ * (2D, 3D, Array), the helper becomes a plane or box mesh.
  *
- * This helper can only be used with {@link WebGLRenderer}.
- * When using {@link WebGPURenderer}, import from `TextureHelperGPU.js`.
+ * This helper can only be used with {@link WebGLRenderer}. When using {@link WebGPURenderer}, import from
+ * `TextureHelperGPU.js`.
  *
  * @augments Mesh
  * @three_import import { TextureHelper } from 'three/addons/helpers/TextureHelper.js';
  */
 class TextureHelper extends Mesh {
+     /**
+      * Constructs a new texture helper.
+      *
+      * @param {Texture} texture - The texture to visualize.
+      * @param {number} [width=1] - The helper's width. Default is `1`
+      * @param {number} [height=1] - The helper's height. Default is `1`
+      * @param {number} [depth=1] - The helper's depth. Default is `1`
+      */
+     constructor(texture, width = 1, height = 1, depth = 1) {
+          const material = new ShaderMaterial({
+               type: "TextureHelperMaterial",
 
-	/**
-	 * Constructs a new texture helper.
-	 *
-	 * @param {Texture} texture - The texture to visualize.
-	 * @param {number} [width=1] - The helper's width.
-	 * @param {number} [height=1] - The helper's height.
-	 * @param {number} [depth=1] - The helper's depth.
-	 */
-	constructor( texture, width = 1, height = 1, depth = 1 ) {
+               side: DoubleSide,
+               transparent: true,
 
-		const material = new ShaderMaterial( {
+               uniforms: {
+                    map: { value: texture },
+                    alpha: { value: getAlpha(texture) },
+               },
 
-			type: 'TextureHelperMaterial',
+               vertexShader: [
+                    "attribute vec3 uvw;",
 
-			side: DoubleSide,
-			transparent: true,
+                    "varying vec3 vUvw;",
 
-			uniforms: {
+                    "void main() {",
 
-				map: { value: texture },
-				alpha: { value: getAlpha( texture ) },
+                    "	vUvw = uvw;",
 
-			},
+                    "	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );",
 
-			vertexShader: [
+                    "}",
+               ].join("\n"),
 
-				'attribute vec3 uvw;',
+               fragmentShader: [
+                    "precision highp float;",
 
-				'varying vec3 vUvw;',
+                    "precision highp sampler2DArray;",
 
-				'void main() {',
+                    "precision highp sampler3D;",
 
-				'	vUvw = uvw;',
+                    "uniform {samplerType} map;",
 
-				'	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );',
+                    "uniform float alpha;",
 
-				'}',
+                    "varying vec3 vUvw;",
 
-			].join( '\n' ),
+                    "vec4 textureHelper( in sampler2D map ) { return texture( map, vUvw.xy ); }",
 
-			fragmentShader: [
+                    "vec4 textureHelper( in sampler2DArray map ) { return texture( map, vUvw ); }",
 
-				'precision highp float;',
+                    "vec4 textureHelper( in sampler3D map ) { return texture( map, vUvw ); }",
 
-				'precision highp sampler2DArray;',
+                    "vec4 textureHelper( in samplerCube map ) { return texture( map, vUvw ); }",
 
-				'precision highp sampler3D;',
+                    "void main() {",
 
-				'uniform {samplerType} map;',
+                    "	gl_FragColor = linearToOutputTexel( vec4( textureHelper( map ).xyz, alpha ) );",
 
-				'uniform float alpha;',
+                    "}",
+               ]
+                    .join("\n")
+                    .replace("{samplerType}", getSamplerType(texture)),
+          });
 
-				'varying vec3 vUvw;',
+          const geometry = texture.isCubeTexture
+               ? createCubeGeometry(width, height, depth)
+               : createSliceGeometry(texture, width, height, depth);
 
-				'vec4 textureHelper( in sampler2D map ) { return texture( map, vUvw.xy ); }',
+          super(geometry, material);
 
-				'vec4 textureHelper( in sampler2DArray map ) { return texture( map, vUvw ); }',
+          /**
+           * The texture to visualize.
+           *
+           * @type {Texture}
+           */
+          this.texture = texture;
+          this.type = "TextureHelper";
+     }
 
-				'vec4 textureHelper( in sampler3D map ) { return texture( map, vUvw ); }',
-
-				'vec4 textureHelper( in samplerCube map ) { return texture( map, vUvw ); }',
-
-				'void main() {',
-
-				'	gl_FragColor = linearToOutputTexel( vec4( textureHelper( map ).xyz, alpha ) );',
-
-				'}'
-
-			].join( '\n' ).replace( '{samplerType}', getSamplerType( texture ) )
-
-		} );
-
-		const geometry = texture.isCubeTexture
-			? createCubeGeometry( width, height, depth )
-			: createSliceGeometry( texture, width, height, depth );
-
-		super( geometry, material );
-
-		/**
-		 * The texture to visualize.
-		 *
-		 * @type {Texture}
-		 */
-		this.texture = texture;
-		this.type = 'TextureHelper';
-
-	}
-
-	/**
-	 * Frees the GPU-related resources allocated by this instance. Call this
-	 * method whenever this instance is no longer used in your app.
-	 */
-	dispose() {
-
-		this.geometry.dispose();
-		this.material.dispose();
-
-	}
-
+     /**
+      * Frees the GPU-related resources allocated by this instance. Call this method whenever this instance is no longer
+      * used in your app.
+      */
+     dispose() {
+          this.geometry.dispose();
+          this.material.dispose();
+     }
 }
 
-function getSamplerType( texture ) {
-
-	if ( texture.isCubeTexture ) {
-
-		return 'samplerCube';
-
-	} else if ( texture.isDataArrayTexture || texture.isCompressedArrayTexture ) {
-
-		return 'sampler2DArray';
-
-	} else if ( texture.isData3DTexture || texture.isCompressed3DTexture ) {
-
-		return 'sampler3D';
-
-	} else {
-
-		return 'sampler2D';
-
-	}
-
+function getSamplerType(texture) {
+     if (texture.isCubeTexture) {
+          return "samplerCube";
+     } else if (texture.isDataArrayTexture || texture.isCompressedArrayTexture) {
+          return "sampler2DArray";
+     } else if (texture.isData3DTexture || texture.isCompressed3DTexture) {
+          return "sampler3D";
+     } else {
+          return "sampler2D";
+     }
 }
 
-function getImageCount( texture ) {
-
-	if ( texture.isCubeTexture ) {
-
-		return 6;
-
-	} else if ( texture.isDataArrayTexture || texture.isCompressedArrayTexture ) {
-
-		return texture.image.depth;
-
-	} else if ( texture.isData3DTexture || texture.isCompressed3DTexture ) {
-
-		return texture.image.depth;
-
-	} else {
-
-		return 1;
-
-	}
-
+function getImageCount(texture) {
+     if (texture.isCubeTexture) {
+          return 6;
+     } else if (texture.isDataArrayTexture || texture.isCompressedArrayTexture) {
+          return texture.image.depth;
+     } else if (texture.isData3DTexture || texture.isCompressed3DTexture) {
+          return texture.image.depth;
+     } else {
+          return 1;
+     }
 }
 
-function getAlpha( texture ) {
-
-	if ( texture.isCubeTexture ) {
-
-		return 1;
-
-	} else if ( texture.isDataArrayTexture || texture.isCompressedArrayTexture ) {
-
-		return Math.max( 1 / texture.image.depth, 0.25 );
-
-	} else if ( texture.isData3DTexture || texture.isCompressed3DTexture ) {
-
-		return Math.max( 1 / texture.image.depth, 0.25 );
-
-	} else {
-
-		return 1;
-
-	}
-
+function getAlpha(texture) {
+     if (texture.isCubeTexture) {
+          return 1;
+     } else if (texture.isDataArrayTexture || texture.isCompressedArrayTexture) {
+          return Math.max(1 / texture.image.depth, 0.25);
+     } else if (texture.isData3DTexture || texture.isCompressed3DTexture) {
+          return Math.max(1 / texture.image.depth, 0.25);
+     } else {
+          return 1;
+     }
 }
 
-function createCubeGeometry( width, height, depth ) {
+function createCubeGeometry(width, height, depth) {
+     const geometry = new BoxGeometry(width, height, depth);
 
-	const geometry = new BoxGeometry( width, height, depth );
+     const position = geometry.attributes.position;
+     const uv = geometry.attributes.uv;
+     const uvw = new BufferAttribute(new Float32Array(uv.count * 3), 3);
 
-	const position = geometry.attributes.position;
-	const uv = geometry.attributes.uv;
-	const uvw = new BufferAttribute( new Float32Array( uv.count * 3 ), 3 );
+     const _direction = new Vector3();
 
-	const _direction = new Vector3();
+     for (let j = 0, jl = uv.count; j < jl; ++j) {
+          _direction.fromBufferAttribute(position, j).normalize();
 
-	for ( let j = 0, jl = uv.count; j < jl; ++ j ) {
+          const u = _direction.x;
+          const v = _direction.y;
+          const w = _direction.z;
 
-		_direction.fromBufferAttribute( position, j ).normalize();
+          uvw.setXYZ(j, u, v, w);
+     }
 
-		const u = _direction.x;
-		const v = _direction.y;
-		const w = _direction.z;
+     geometry.deleteAttribute("uv");
+     geometry.setAttribute("uvw", uvw);
 
-		uvw.setXYZ( j, u, v, w );
-
-	}
-
-	geometry.deleteAttribute( 'uv' );
-	geometry.setAttribute( 'uvw', uvw );
-
-	return geometry;
-
+     return geometry;
 }
 
-function createSliceGeometry( texture, width, height, depth ) {
+function createSliceGeometry(texture, width, height, depth) {
+     const sliceCount = getImageCount(texture);
 
-	const sliceCount = getImageCount( texture );
+     const geometries = [];
 
-	const geometries = [];
+     for (let i = 0; i < sliceCount; ++i) {
+          const geometry = new PlaneGeometry(width, height);
 
-	for ( let i = 0; i < sliceCount; ++ i ) {
+          if (sliceCount > 1) {
+               geometry.translate(0, 0, depth * (i / (sliceCount - 1) - 0.5));
+          }
 
-		const geometry = new PlaneGeometry( width, height );
+          const uv = geometry.attributes.uv;
+          const uvw = new BufferAttribute(new Float32Array(uv.count * 3), 3);
 
-		if ( sliceCount > 1 ) {
+          for (let j = 0, jl = uv.count; j < jl; ++j) {
+               const u = uv.getX(j);
+               const v = texture.flipY ? uv.getY(j) : 1 - uv.getY(j);
+               const w =
+                    sliceCount === 1
+                         ? 1
+                         : texture.isDataArrayTexture || texture.isCompressedArrayTexture
+                           ? i
+                           : i / (sliceCount - 1);
 
-			geometry.translate( 0, 0, depth * ( i / ( sliceCount - 1 ) - 0.5 ) );
+               uvw.setXYZ(j, u, v, w);
+          }
 
-		}
+          geometry.deleteAttribute("uv");
+          geometry.setAttribute("uvw", uvw);
 
-		const uv = geometry.attributes.uv;
-		const uvw = new BufferAttribute( new Float32Array( uv.count * 3 ), 3 );
+          geometries.push(geometry);
+     }
 
-		for ( let j = 0, jl = uv.count; j < jl; ++ j ) {
-
-			const u = uv.getX( j );
-			const v = texture.flipY ? uv.getY( j ) : 1 - uv.getY( j );
-			const w = sliceCount === 1
-				? 1
-				: texture.isDataArrayTexture || texture.isCompressedArrayTexture
-					? i
-					: i / ( sliceCount - 1 );
-
-			uvw.setXYZ( j, u, v, w );
-
-		}
-
-		geometry.deleteAttribute( 'uv' );
-		geometry.setAttribute( 'uvw', uvw );
-
-		geometries.push( geometry );
-
-	}
-
-	return mergeGeometries( geometries );
-
+     return mergeGeometries(geometries);
 }
 
 export { TextureHelper };

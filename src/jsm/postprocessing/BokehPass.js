@@ -1,16 +1,16 @@
 import {
-	Color,
-	HalfFloatType,
-	MeshDepthMaterial,
-	NearestFilter,
-	NoBlending,
-	RGBADepthPacking,
-	ShaderMaterial,
-	UniformsUtils,
-	WebGLRenderTarget
-} from 'three';
-import { Pass, FullScreenQuad } from './Pass.js';
-import { BokehShader } from '../shaders/BokehShader.js';
+     Color,
+     HalfFloatType,
+     MeshDepthMaterial,
+     NearestFilter,
+     NoBlending,
+     RGBADepthPacking,
+     ShaderMaterial,
+     UniformsUtils,
+     WebGLRenderTarget,
+} from "three";
+import { Pass, FullScreenQuad } from "./Pass.js";
+import { BokehShader } from "../shaders/BokehShader.js";
 
 /**
  * Pass for creating depth of field (DOF) effect.
@@ -28,191 +28,179 @@ import { BokehShader } from '../shaders/BokehShader.js';
  * @three_import import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
  */
 class BokehPass extends Pass {
+     /**
+      * Constructs a new Bokeh pass.
+      *
+      * @param {Scene} scene - The scene to render the DOF for.
+      * @param {Camera} camera - The camera.
+      * @param {BokehPass~Options} params - The pass options.
+      */
+     constructor(scene, camera, params) {
+          super();
 
-	/**
-	 * Constructs a new Bokeh pass.
-	 *
-	 * @param {Scene} scene - The scene to render the DOF for.
-	 * @param {Camera} camera - The camera.
-	 * @param {BokehPass~Options} params - The pass options.
-	 */
-	constructor( scene, camera, params ) {
+          /**
+           * The scene to render the DOF for.
+           *
+           * @type {Scene}
+           */
+          this.scene = scene;
 
-		super();
+          /**
+           * The camera.
+           *
+           * @type {Camera}
+           */
+          this.camera = camera;
 
-		/**
-		 * The scene to render the DOF for.
-		 *
-		 * @type {Scene}
-		 */
-		this.scene = scene;
+          const focus = params.focus !== undefined ? params.focus : 1.0;
+          const aperture = params.aperture !== undefined ? params.aperture : 0.025;
+          const maxblur = params.maxblur !== undefined ? params.maxblur : 1.0;
 
-		/**
-		 * The camera.
-		 *
-		 * @type {Camera}
-		 */
-		this.camera = camera;
+          // render targets
 
-		const focus = ( params.focus !== undefined ) ? params.focus : 1.0;
-		const aperture = ( params.aperture !== undefined ) ? params.aperture : 0.025;
-		const maxblur = ( params.maxblur !== undefined ) ? params.maxblur : 1.0;
+          this._renderTargetDepth = new WebGLRenderTarget(1, 1, {
+               // will be resized later
+               minFilter: NearestFilter,
+               magFilter: NearestFilter,
+               type: HalfFloatType,
+          });
 
-		// render targets
+          this._renderTargetDepth.texture.name = "BokehPass.depth";
 
-		this._renderTargetDepth = new WebGLRenderTarget( 1, 1, { // will be resized later
-			minFilter: NearestFilter,
-			magFilter: NearestFilter,
-			type: HalfFloatType
-		} );
+          // depth material
 
-		this._renderTargetDepth.texture.name = 'BokehPass.depth';
+          this._materialDepth = new MeshDepthMaterial();
+          this._materialDepth.depthPacking = RGBADepthPacking;
+          this._materialDepth.blending = NoBlending;
 
-		// depth material
+          // bokeh material
 
-		this._materialDepth = new MeshDepthMaterial();
-		this._materialDepth.depthPacking = RGBADepthPacking;
-		this._materialDepth.blending = NoBlending;
+          const bokehUniforms = UniformsUtils.clone(BokehShader.uniforms);
 
-		// bokeh material
+          bokehUniforms["tDepth"].value = this._renderTargetDepth.texture;
 
-		const bokehUniforms = UniformsUtils.clone( BokehShader.uniforms );
+          bokehUniforms["focus"].value = focus;
+          bokehUniforms["aspect"].value = camera.aspect;
+          bokehUniforms["aperture"].value = aperture;
+          bokehUniforms["maxblur"].value = maxblur;
+          bokehUniforms["nearClip"].value = camera.near;
+          bokehUniforms["farClip"].value = camera.far;
 
-		bokehUniforms[ 'tDepth' ].value = this._renderTargetDepth.texture;
+          /**
+           * The pass bokeh material.
+           *
+           * @type {ShaderMaterial}
+           */
+          this.materialBokeh = new ShaderMaterial({
+               defines: Object.assign({}, BokehShader.defines),
+               uniforms: bokehUniforms,
+               vertexShader: BokehShader.vertexShader,
+               fragmentShader: BokehShader.fragmentShader,
+          });
 
-		bokehUniforms[ 'focus' ].value = focus;
-		bokehUniforms[ 'aspect' ].value = camera.aspect;
-		bokehUniforms[ 'aperture' ].value = aperture;
-		bokehUniforms[ 'maxblur' ].value = maxblur;
-		bokehUniforms[ 'nearClip' ].value = camera.near;
-		bokehUniforms[ 'farClip' ].value = camera.far;
+          /**
+           * The pass uniforms. Use this object if you want to update the `focus`, `aperture` or `maxblur` values at
+           * runtime.
+           *
+           * ```js
+           * pass.uniforms.focus.value = focus;
+           * pass.uniforms.aperture.value = aperture;
+           * pass.uniforms.maxblur.value = maxblur;
+           * ```
+           *
+           * @type {Object}
+           */
+          this.uniforms = bokehUniforms;
 
-		/**
-		 * The pass bokeh material.
-		 *
-		 * @type {ShaderMaterial}
-		 */
-		this.materialBokeh = new ShaderMaterial( {
-			defines: Object.assign( {}, BokehShader.defines ),
-			uniforms: bokehUniforms,
-			vertexShader: BokehShader.vertexShader,
-			fragmentShader: BokehShader.fragmentShader
-		} );
+          // internals
 
-		/**
-		 * The pass uniforms.  Use this object if you want to update the
-		 * `focus`, `aperture` or `maxblur` values at runtime.
-		 *
-		 * ```js
-		 * pass.uniforms.focus.value = focus;
-		 * pass.uniforms.aperture.value = aperture;
-		 * pass.uniforms.maxblur.value = maxblur;
-		 * ```
-		 *
-		 * @type {Object}
-		 */
-		this.uniforms = bokehUniforms;
+          this._fsQuad = new FullScreenQuad(this.materialBokeh);
 
-		// internals
+          this._oldClearColor = new Color();
+     }
 
-		this._fsQuad = new FullScreenQuad( this.materialBokeh );
+     /**
+      * Performs the Bokeh pass.
+      *
+      * @param {WebGLRenderer} renderer - The renderer.
+      * @param {WebGLRenderTarget} writeBuffer - The write buffer. This buffer is intended as the rendering destination
+      *   for the pass.
+      * @param {WebGLRenderTarget} readBuffer - The read buffer. The pass can access the result from the previous pass
+      *   from this buffer.
+      * @param {number} deltaTime - The delta time in seconds.
+      * @param {boolean} maskActive - Whether masking is active or not.
+      */
+     render(renderer, writeBuffer, readBuffer /*, deltaTime, maskActive*/) {
+          // Render depth into texture
 
-		this._oldClearColor = new Color();
+          this.scene.overrideMaterial = this._materialDepth;
 
-	}
+          renderer.getClearColor(this._oldClearColor);
+          const oldClearAlpha = renderer.getClearAlpha();
+          const oldAutoClear = renderer.autoClear;
+          renderer.autoClear = false;
 
-	/**
-	 * Performs the Bokeh pass.
-	 *
-	 * @param {WebGLRenderer} renderer - The renderer.
-	 * @param {WebGLRenderTarget} writeBuffer - The write buffer. This buffer is intended as the rendering
-	 * destination for the pass.
-	 * @param {WebGLRenderTarget} readBuffer - The read buffer. The pass can access the result from the
-	 * previous pass from this buffer.
-	 * @param {number} deltaTime - The delta time in seconds.
-	 * @param {boolean} maskActive - Whether masking is active or not.
-	 */
-	render( renderer, writeBuffer, readBuffer/*, deltaTime, maskActive*/ ) {
+          renderer.setClearColor(0xffffff);
+          renderer.setClearAlpha(1.0);
+          renderer.setRenderTarget(this._renderTargetDepth);
+          renderer.clear();
+          renderer.render(this.scene, this.camera);
 
-		// Render depth into texture
+          // Render bokeh composite
 
-		this.scene.overrideMaterial = this._materialDepth;
+          this.uniforms["tColor"].value = readBuffer.texture;
+          this.uniforms["nearClip"].value = this.camera.near;
+          this.uniforms["farClip"].value = this.camera.far;
 
-		renderer.getClearColor( this._oldClearColor );
-		const oldClearAlpha = renderer.getClearAlpha();
-		const oldAutoClear = renderer.autoClear;
-		renderer.autoClear = false;
+          if (this.renderToScreen) {
+               renderer.setRenderTarget(null);
+               this._fsQuad.render(renderer);
+          } else {
+               renderer.setRenderTarget(writeBuffer);
+               renderer.clear();
+               this._fsQuad.render(renderer);
+          }
 
-		renderer.setClearColor( 0xffffff );
-		renderer.setClearAlpha( 1.0 );
-		renderer.setRenderTarget( this._renderTargetDepth );
-		renderer.clear();
-		renderer.render( this.scene, this.camera );
+          this.scene.overrideMaterial = null;
+          renderer.setClearColor(this._oldClearColor);
+          renderer.setClearAlpha(oldClearAlpha);
+          renderer.autoClear = oldAutoClear;
+     }
 
-		// Render bokeh composite
+     /**
+      * Sets the size of the pass.
+      *
+      * @param {number} width - The width to set.
+      * @param {number} height - The height to set.
+      */
+     setSize(width, height) {
+          this.materialBokeh.uniforms["aspect"].value = width / height;
 
-		this.uniforms[ 'tColor' ].value = readBuffer.texture;
-		this.uniforms[ 'nearClip' ].value = this.camera.near;
-		this.uniforms[ 'farClip' ].value = this.camera.far;
+          this._renderTargetDepth.setSize(width, height);
+     }
 
-		if ( this.renderToScreen ) {
+     /**
+      * Frees the GPU-related resources allocated by this instance. Call this method whenever the pass is no longer used
+      * in your app.
+      */
+     dispose() {
+          this._renderTargetDepth.dispose();
 
-			renderer.setRenderTarget( null );
-			this._fsQuad.render( renderer );
+          this._materialDepth.dispose();
+          this.materialBokeh.dispose();
 
-		} else {
-
-			renderer.setRenderTarget( writeBuffer );
-			renderer.clear();
-			this._fsQuad.render( renderer );
-
-		}
-
-		this.scene.overrideMaterial = null;
-		renderer.setClearColor( this._oldClearColor );
-		renderer.setClearAlpha( oldClearAlpha );
-		renderer.autoClear = oldAutoClear;
-
-	}
-
-	/**
-	 * Sets the size of the pass.
-	 *
-	 * @param {number} width - The width to set.
-	 * @param {number} height - The height to set.
-	 */
-	setSize( width, height ) {
-
-		this.materialBokeh.uniforms[ 'aspect' ].value = width / height;
-
-		this._renderTargetDepth.setSize( width, height );
-
-	}
-
-	/**
-	 * Frees the GPU-related resources allocated by this instance. Call this
-	 * method whenever the pass is no longer used in your app.
-	 */
-	dispose() {
-
-		this._renderTargetDepth.dispose();
-
-		this._materialDepth.dispose();
-		this.materialBokeh.dispose();
-
-		this._fsQuad.dispose();
-
-	}
-
+          this._fsQuad.dispose();
+     }
 }
 
 /**
  * Constructor options of `BokehPass`.
  *
  * @typedef {Object} BokehPass~Options
- * @property {number} [focus=1] - Defines the effect's focus which is the distance along the camera's look direction in world units.
- * @property {number} [aperture=0.025] - Defines the effect's aperture.
- * @property {number} [maxblur=1] - Defines the effect's maximum blur.
- **/
+ * @property {number} [focus=1] - Defines the effect's focus which is the distance along the camera's look direction in
+ *   world units. Default is `1`
+ * @property {number} [aperture=0.025] - Defines the effect's aperture. Default is `0.025`
+ * @property {number} [maxblur=1] - Defines the effect's maximum blur. Default is `1`
+ */
 
 export { BokehPass };

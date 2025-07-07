@@ -1,5 +1,5 @@
-import { TempNode } from 'three/webgpu';
-import { nodeObject, Fn, float, uniform, vec3, vec4, mix } from 'three/tsl';
+import { TempNode } from "three/webgpu";
+import { nodeObject, Fn, float, uniform, vec3, vec4, mix } from "three/tsl";
 
 /**
  * A post processing node for color grading via lookup tables.
@@ -8,89 +8,79 @@ import { nodeObject, Fn, float, uniform, vec3, vec4, mix } from 'three/tsl';
  * @three_import import { lut3D } from 'three/addons/tsl/display/Lut3DNode.js';
  */
 class Lut3DNode extends TempNode {
+     static get type() {
+          return "Lut3DNode";
+     }
 
-	static get type() {
+     /**
+      * Constructs a new LUT node.
+      *
+      * @param {Node} inputNode - The node that represents the input of the effect.
+      * @param {TextureNode} lutNode - A texture node that represents the lookup table.
+      * @param {number} size - The size of the lookup table.
+      * @param {Node<float>} intensityNode - Controls the intensity of the effect.
+      */
+     constructor(inputNode, lutNode, size, intensityNode) {
+          super("vec4");
 
-		return 'Lut3DNode';
+          /**
+           * The node that represents the input of the effect.
+           *
+           * @type {Node}
+           */
+          this.inputNode = inputNode;
 
-	}
+          /**
+           * A texture node that represents the lookup table.
+           *
+           * @type {TextureNode}
+           */
+          this.lutNode = lutNode;
 
-	/**
-	 * Constructs a new LUT node.
-	 *
-	 * @param {Node} inputNode - The node that represents the input of the effect.
-	 * @param {TextureNode} lutNode - A texture node that represents the lookup table.
-	 * @param {number} size - The size of the lookup table.
-	 * @param {Node<float>} intensityNode - Controls the intensity of the effect.
-	 */
-	constructor( inputNode, lutNode, size, intensityNode ) {
+          /**
+           * The size of the lookup table.
+           *
+           * @type {UniformNode<float>}
+           */
+          this.size = uniform(size);
 
-		super( 'vec4' );
+          /**
+           * Controls the intensity of the effect.
+           *
+           * @type {Node<float>}
+           */
+          this.intensityNode = intensityNode;
+     }
 
-		/**
-		 * The node that represents the input of the effect.
-		 *
-		 * @type {Node}
-		 */
-		this.inputNode = inputNode;
+     /**
+      * This method is used to setup the effect's TSL code.
+      *
+      * @param {NodeBuilder} builder - The current node builder.
+      * @return {ShaderCallNodeInternal}
+      */
+     setup() {
+          const { inputNode, lutNode } = this;
 
-		/**
-		 * A texture node that represents the lookup table.
-		 *
-		 * @type {TextureNode}
-		 */
-		this.lutNode = lutNode;
+          const sampleLut = (uv) => lutNode.sample(uv);
 
-		/**
-		 * The size of the lookup table.
-		 *
-		 * @type {UniformNode<float>}
-		 */
-		this.size = uniform( size );
+          const lut3D = Fn(() => {
+               const base = inputNode;
 
-		/**
-		 * Controls the intensity of the effect.
-		 *
-		 * @type {Node<float>}
-		 */
-		this.intensityNode = intensityNode;
+               // pull the sample in by half a pixel so the sample begins at the center of the edge pixels.
 
-	}
+               const pixelWidth = float(1.0).div(this.size);
+               const halfPixelWidth = float(0.5).div(this.size);
+               const uvw = vec3(halfPixelWidth).add(base.rgb.mul(float(1.0).sub(pixelWidth)));
 
-	/**
-	 * This method is used to setup the effect's TSL code.
-	 *
-	 * @param {NodeBuilder} builder - The current node builder.
-	 * @return {ShaderCallNodeInternal}
-	 */
-	setup() {
+               const lutValue = vec4(sampleLut(uvw).rgb, base.a);
 
-		const { inputNode, lutNode } = this;
+               return vec4(mix(base, lutValue, this.intensityNode));
+          });
 
-		const sampleLut = ( uv ) => lutNode.sample( uv );
+          const outputNode = lut3D();
 
-		const lut3D = Fn( () => {
-
-			const base = inputNode;
-
-			// pull the sample in by half a pixel so the sample begins at the center of the edge pixels.
-
-			const pixelWidth = float( 1.0 ).div( this.size );
-			const halfPixelWidth = float( 0.5 ).div( this.size );
-			const uvw = vec3( halfPixelWidth ).add( base.rgb.mul( float( 1.0 ).sub( pixelWidth ) ) );
-
-			const lutValue = vec4( sampleLut( uvw ).rgb, base.a );
-
-			return vec4( mix( base, lutValue, this.intensityNode ) );
-
-		} );
-
-		const outputNode = lut3D();
-
-		return outputNode;
-
-	}
-
+          return outputNode;
+     }
 }
 
 export default Lut3DNode;
@@ -106,4 +96,5 @@ export default Lut3DNode;
  * @param {Node<float> | number} intensity - Controls the intensity of the effect.
  * @returns {Lut3DNode}
  */
-export const lut3D = ( node, lut, size, intensity ) => nodeObject( new Lut3DNode( nodeObject( node ), nodeObject( lut ), size, nodeObject( intensity ) ) );
+export const lut3D = (node, lut, size, intensity) =>
+     nodeObject(new Lut3DNode(nodeObject(node), nodeObject(lut), size, nodeObject(intensity)));

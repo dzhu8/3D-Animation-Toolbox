@@ -1,6 +1,4 @@
-import {
-	Vector2
-} from 'three';
+import { Vector2 } from "three";
 
 /**
  * @module ConvolutionShader
@@ -14,25 +12,20 @@ import {
  * @type {ShaderMaterial~Shader}
  */
 const ConvolutionShader = {
+     name: "ConvolutionShader",
 
-	name: 'ConvolutionShader',
+     defines: {
+          KERNEL_SIZE_FLOAT: "25.0",
+          KERNEL_SIZE_INT: "25",
+     },
 
-	defines: {
+     uniforms: {
+          tDiffuse: { value: null },
+          uImageIncrement: { value: new Vector2(0.001953125, 0.0) },
+          cKernel: { value: [] },
+     },
 
-		'KERNEL_SIZE_FLOAT': '25.0',
-		'KERNEL_SIZE_INT': '25'
-
-	},
-
-	uniforms: {
-
-		'tDiffuse': { value: null },
-		'uImageIncrement': { value: new Vector2( 0.001953125, 0.0 ) },
-		'cKernel': { value: [] }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		uniform vec2 uImageIncrement;
 
@@ -45,7 +38,7 @@ const ConvolutionShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform float cKernel[ KERNEL_SIZE_INT ];
 
@@ -68,7 +61,7 @@ const ConvolutionShader = {
 
 			gl_FragColor = sum;
 
-		}`
+		}`,
 };
 
 export { ConvolutionShader };

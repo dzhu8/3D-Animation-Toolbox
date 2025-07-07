@@ -1,5 +1,5 @@
-import { StereoCamera, Vector2, PassNode, RendererUtils } from 'three/webgpu';
-import { nodeObject } from 'three/tsl';
+import { StereoCamera, Vector2, PassNode, RendererUtils } from "three/webgpu";
+import { nodeObject } from "three/tsl";
 
 const _size = /*@__PURE__*/ new Vector2();
 
@@ -12,98 +12,88 @@ let _rendererState;
  * @three_import import { stereoPass } from 'three/addons/tsl/display/StereoPassNode.js';
  */
 class StereoPassNode extends PassNode {
+     static get type() {
+          return "StereoPassNode";
+     }
 
-	static get type() {
+     /**
+      * Constructs a new stereo pass node.
+      *
+      * @param {Scene} scene - The scene to render.
+      * @param {Camera} camera - The camera to render the scene with.
+      */
+     constructor(scene, camera) {
+          super(PassNode.COLOR, scene, camera);
 
-		return 'StereoPassNode';
+          /**
+           * This flag can be used for type testing.
+           *
+           * @type {boolean}
+           * @readonly
+           * @default true
+           */
+          this.isStereoPassNode = true;
 
-	}
+          /**
+           * The internal stereo camera that is used to render the scene.
+           *
+           * @type {StereoCamera}
+           */
+          this.stereo = new StereoCamera();
+          this.stereo.aspect = 0.5;
+     }
 
-	/**
-	 * Constructs a new stereo pass node.
-	 *
-	 * @param {Scene} scene - The scene to render.
-	 * @param {Camera} camera - The camera to render the scene with.
-	 */
-	constructor( scene, camera ) {
+     /**
+      * This method is used to render the stereo effect once per frame.
+      *
+      * @param {NodeFrame} frame - The current node frame.
+      */
+     updateBefore(frame) {
+          const { renderer } = frame;
+          const { scene, camera, stereo, renderTarget } = this;
 
-		super( PassNode.COLOR, scene, camera );
+          _rendererState = RendererUtils.resetRendererState(renderer, _rendererState);
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isStereoPassNode = true;
+          //
 
-		/**
-		 * The internal stereo camera that is used to render the scene.
-		 *
-		 * @type {StereoCamera}
-		 */
-		this.stereo = new StereoCamera();
-		this.stereo.aspect = 0.5;
+          this._pixelRatio = renderer.getPixelRatio();
 
-	}
+          stereo.cameraL.coordinateSystem = renderer.coordinateSystem;
+          stereo.cameraR.coordinateSystem = renderer.coordinateSystem;
+          stereo.update(camera);
 
-	/**
-	 * This method is used to render the stereo effect once per frame.
-	 *
-	 * @param {NodeFrame} frame - The current node frame.
-	 */
-	updateBefore( frame ) {
+          const size = renderer.getSize(_size);
+          this.setSize(size.width, size.height);
 
-		const { renderer } = frame;
-		const { scene, camera, stereo, renderTarget } = this;
+          renderer.autoClear = false;
 
-		_rendererState = RendererUtils.resetRendererState( renderer, _rendererState );
+          this._cameraNear.value = camera.near;
+          this._cameraFar.value = camera.far;
 
-		//
+          for (const name in this._previousTextures) {
+               this.toggleTexture(name);
+          }
 
-		this._pixelRatio = renderer.getPixelRatio();
+          renderer.setRenderTarget(renderTarget);
+          renderer.setMRT(this._mrt);
+          renderer.clear();
 
-		stereo.cameraL.coordinateSystem = renderer.coordinateSystem;
-		stereo.cameraR.coordinateSystem = renderer.coordinateSystem;
-		stereo.update( camera );
+          renderTarget.scissorTest = true;
 
-		const size = renderer.getSize( _size );
-		this.setSize( size.width, size.height );
+          renderTarget.scissor.set(0, 0, renderTarget.width / 2, renderTarget.height);
+          renderTarget.viewport.set(0, 0, renderTarget.width / 2, renderTarget.height);
+          renderer.render(scene, stereo.cameraL);
 
-		renderer.autoClear = false;
+          renderTarget.scissor.set(renderTarget.width / 2, 0, renderTarget.width / 2, renderTarget.height);
+          renderTarget.viewport.set(renderTarget.width / 2, 0, renderTarget.width / 2, renderTarget.height);
+          renderer.render(scene, stereo.cameraR);
 
-		this._cameraNear.value = camera.near;
-		this._cameraFar.value = camera.far;
+          renderTarget.scissorTest = false;
 
-		for ( const name in this._previousTextures ) {
+          // restore
 
-			this.toggleTexture( name );
-
-		}
-
-		renderer.setRenderTarget( renderTarget );
-		renderer.setMRT( this._mrt );
-		renderer.clear();
-
-		renderTarget.scissorTest = true;
-
-		renderTarget.scissor.set( 0, 0, renderTarget.width / 2, renderTarget.height );
-		renderTarget.viewport.set( 0, 0, renderTarget.width / 2, renderTarget.height );
-		renderer.render( scene, stereo.cameraL );
-
-		renderTarget.scissor.set( renderTarget.width / 2, 0, renderTarget.width / 2, renderTarget.height );
-		renderTarget.viewport.set( renderTarget.width / 2, 0, renderTarget.width / 2, renderTarget.height );
-		renderer.render( scene, stereo.cameraR );
-
-		renderTarget.scissorTest = false;
-
-		// restore
-
-		RendererUtils.restoreRendererState( renderer, _rendererState );
-
-	}
-
+          RendererUtils.restoreRendererState(renderer, _rendererState);
+     }
 }
 
 export default StereoPassNode;
@@ -117,4 +107,4 @@ export default StereoPassNode;
  * @param {Camera} camera - The camera to render the scene with.
  * @returns {StereoPassNode}
  */
-export const stereoPass = ( scene, camera ) => nodeObject( new StereoPassNode( scene, camera ) );
+export const stereoPass = (scene, camera) => nodeObject(new StereoPassNode(scene, camera));

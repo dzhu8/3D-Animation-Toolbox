@@ -1,46 +1,37 @@
-import {
-	Mesh,
-	ShaderMaterial,
-	SphereGeometry
-} from 'three';
+import { Mesh, ShaderMaterial, SphereGeometry } from "three";
 
 /**
  * Renders a sphere to visualize a light probe in the scene.
  *
- * This helper can only be used with {@link WebGLRenderer}.
- * When using {@link WebGPURenderer}, import from `LightProbeHelperGPU.js`.
+ * This helper can only be used with {@link WebGLRenderer}. When using {@link WebGPURenderer}, import from
+ * `LightProbeHelperGPU.js`.
  *
  * ```js
- * const helper = new LightProbeHelper( lightProbe );
- * scene.add( helper );
+ * const helper = new LightProbeHelper(lightProbe);
+ * scene.add(helper);
  * ```
  *
  * @augments Mesh
  * @three_import import { LightProbeHelper } from 'three/addons/helpers/LightProbeHelper.js';
  */
 class LightProbeHelper extends Mesh {
+     /**
+      * Constructs a new light probe helper.
+      *
+      * @param {LightProbe} lightProbe - The light probe to visualize.
+      * @param {number} [size=1] - The size of the helper. Default is `1`
+      */
+     constructor(lightProbe, size = 1) {
+          const material = new ShaderMaterial({
+               type: "LightProbeHelperMaterial",
 
-	/**
-	 * Constructs a new light probe helper.
-	 *
-	 * @param {LightProbe} lightProbe - The light probe to visualize.
-	 * @param {number} [size=1] - The size of the helper.
-	 */
-	constructor( lightProbe, size = 1 ) {
+               uniforms: {
+                    sh: { value: lightProbe.sh.coefficients }, // by reference
 
-		const material = new ShaderMaterial( {
+                    intensity: { value: lightProbe.intensity },
+               },
 
-			type: 'LightProbeHelperMaterial',
-
-			uniforms: {
-
-				sh: { value: lightProbe.sh.coefficients }, // by reference
-
-				intensity: { value: lightProbe.intensity }
-
-			},
-
-			vertexShader: /* glsl */`
+               vertexShader: /* glsl */ `
 
 				varying vec3 vNormal;
 
@@ -54,7 +45,7 @@ class LightProbeHelper extends Mesh {
 
 			`,
 
-			fragmentShader: /* glsl */`
+               fragmentShader: /* glsl */ `
 
 				#define RECIPROCAL_PI 0.318309886
 
@@ -112,54 +103,47 @@ class LightProbeHelper extends Mesh {
 				}
 
 			`,
+          });
 
-		} );
+          const geometry = new SphereGeometry(1, 32, 16);
 
-		const geometry = new SphereGeometry( 1, 32, 16 );
+          super(geometry, material);
 
-		super( geometry, material );
+          /**
+           * The light probe to visualize.
+           *
+           * @type {LightProbe}
+           */
+          this.lightProbe = lightProbe;
 
-		/**
-		 * The light probe to visualize.
-		 *
-		 * @type {LightProbe}
-		 */
-		this.lightProbe = lightProbe;
+          /**
+           * The size of the helper.
+           *
+           * @default 1
+           * @type {number}
+           */
+          this.size = size;
+          this.type = "LightProbeHelper";
 
-		/**
-		 * The size of the helper.
-		 *
-		 * @type {number}
-		 * @default 1
-		 */
-		this.size = size;
-		this.type = 'LightProbeHelper';
+          this.onBeforeRender();
+     }
 
-		this.onBeforeRender();
+     /**
+      * Frees the GPU-related resources allocated by this instance. Call this method whenever this instance is no longer
+      * used in your app.
+      */
+     dispose() {
+          this.geometry.dispose();
+          this.material.dispose();
+     }
 
-	}
+     onBeforeRender() {
+          this.position.copy(this.lightProbe.position);
 
-	/**
-	 * Frees the GPU-related resources allocated by this instance. Call this
-	 * method whenever this instance is no longer used in your app.
-	 */
-	dispose() {
+          this.scale.set(1, 1, 1).multiplyScalar(this.size);
 
-		this.geometry.dispose();
-		this.material.dispose();
-
-	}
-
-	onBeforeRender() {
-
-		this.position.copy( this.lightProbe.position );
-
-		this.scale.set( 1, 1, 1 ).multiplyScalar( this.size );
-
-		this.material.uniforms.intensity.value = this.lightProbe.intensity;
-
-	}
-
+          this.material.uniforms.intensity.value = this.lightProbe.intensity;
+     }
 }
 
 export { LightProbeHelper };

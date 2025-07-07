@@ -1,183 +1,158 @@
-import {
-	Color
-} from 'three';
-import { Pass } from './Pass.js';
+import { Color } from "three";
+import { Pass } from "./Pass.js";
 
 /**
- * This class represents a render pass. It takes a camera and a scene and produces
- * a beauty pass for subsequent post processing effects.
+ * This class represents a render pass. It takes a camera and a scene and produces a beauty pass for subsequent post
+ * processing effects.
  *
  * ```js
- * const renderPass = new RenderPass( scene, camera );
- * composer.addPass( renderPass );
+ * const renderPass = new RenderPass(scene, camera);
+ * composer.addPass(renderPass);
  * ```
  *
  * @augments Pass
  * @three_import import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
  */
 class RenderPass extends Pass {
+     /**
+      * Constructs a new render pass.
+      *
+      * @param {Scene} scene - The scene to render.
+      * @param {Camera} camera - The camera.
+      * @param {Material | null} [overrideMaterial=null] - The override material. If set, this material is used for all
+      *   objects in the scene. Default is `null`
+      * @param {?(number | Color | string)} [clearColor=null] - The clear color of the render pass. Default is `null`
+      * @param {number | null} [clearAlpha=null] - The clear alpha of the render pass. Default is `null`
+      */
+     constructor(scene, camera, overrideMaterial = null, clearColor = null, clearAlpha = null) {
+          super();
 
-	/**
-	 * Constructs a new render pass.
-	 *
-	 * @param {Scene} scene - The scene to render.
-	 * @param {Camera} camera - The camera.
-	 * @param {?Material} [overrideMaterial=null] - The override material. If set, this material is used
-	 * for all objects in the scene.
-	 * @param {?(number|Color|string)} [clearColor=null] - The clear color of the render pass.
-	 * @param {?number} [clearAlpha=null] - The clear alpha of the render pass.
-	 */
-	constructor( scene, camera, overrideMaterial = null, clearColor = null, clearAlpha = null ) {
+          /**
+           * The scene to render.
+           *
+           * @type {Scene}
+           */
+          this.scene = scene;
 
-		super();
+          /**
+           * The camera.
+           *
+           * @type {Camera}
+           */
+          this.camera = camera;
 
-		/**
-		 * The scene to render.
-		 *
-		 * @type {Scene}
-		 */
-		this.scene = scene;
+          /**
+           * The override material. If set, this material is used for all objects in the scene.
+           *
+           * @default null
+           * @type {Material | null}
+           */
+          this.overrideMaterial = overrideMaterial;
 
-		/**
-		 * The camera.
-		 *
-		 * @type {Camera}
-		 */
-		this.camera = camera;
+          /**
+           * The clear color of the render pass.
+           *
+           * @default null
+           * @type {?(number | Color | string)}
+           */
+          this.clearColor = clearColor;
 
-		/**
-		 * The override material. If set, this material is used
-		 * for all objects in the scene.
-		 *
-		 * @type {?Material}
-		 * @default null
-		 */
-		this.overrideMaterial = overrideMaterial;
+          /**
+           * The clear alpha of the render pass.
+           *
+           * @default null
+           * @type {number | null}
+           */
+          this.clearAlpha = clearAlpha;
 
-		/**
-		 * The clear color of the render pass.
-		 *
-		 * @type {?(number|Color|string)}
-		 * @default null
-		 */
-		this.clearColor = clearColor;
+          /**
+           * Overwritten to perform a clear operation by default.
+           *
+           * @default true
+           * @type {boolean}
+           */
+          this.clear = true;
 
-		/**
-		 * The clear alpha of the render pass.
-		 *
-		 * @type {?number}
-		 * @default null
-		 */
-		this.clearAlpha = clearAlpha;
+          /**
+           * If set to `true`, only the depth can be cleared when `clear` is to `false`.
+           *
+           * @default false
+           * @type {boolean}
+           */
+          this.clearDepth = false;
 
-		/**
-		 * Overwritten to perform a clear operation by default.
-		 *
-		 * @type {boolean}
-		 * @default true
-		 */
-		this.clear = true;
+          /**
+           * Overwritten to disable the swap.
+           *
+           * @default false
+           * @type {boolean}
+           */
+          this.needsSwap = false;
+          this._oldClearColor = new Color();
+     }
 
-		/**
-		 * If set to `true`, only the depth can be cleared when `clear` is to `false`.
-		 *
-		 * @type {boolean}
-		 * @default false
-		 */
-		this.clearDepth = false;
+     /**
+      * Performs a beauty pass with the configured scene and camera.
+      *
+      * @param {WebGLRenderer} renderer - The renderer.
+      * @param {WebGLRenderTarget} writeBuffer - The write buffer. This buffer is intended as the rendering destination
+      *   for the pass.
+      * @param {WebGLRenderTarget} readBuffer - The read buffer. The pass can access the result from the previous pass
+      *   from this buffer.
+      * @param {number} deltaTime - The delta time in seconds.
+      * @param {boolean} maskActive - Whether masking is active or not.
+      */
+     render(renderer, writeBuffer, readBuffer /*, deltaTime, maskActive */) {
+          const oldAutoClear = renderer.autoClear;
+          renderer.autoClear = false;
 
-		/**
-		 * Overwritten to disable the swap.
-		 *
-		 * @type {boolean}
-		 * @default false
-		 */
-		this.needsSwap = false;
-		this._oldClearColor = new Color();
+          let oldClearAlpha, oldOverrideMaterial;
 
-	}
+          if (this.overrideMaterial !== null) {
+               oldOverrideMaterial = this.scene.overrideMaterial;
 
-	/**
-	 * Performs a beauty pass with the configured scene and camera.
-	 *
-	 * @param {WebGLRenderer} renderer - The renderer.
-	 * @param {WebGLRenderTarget} writeBuffer - The write buffer. This buffer is intended as the rendering
-	 * destination for the pass.
-	 * @param {WebGLRenderTarget} readBuffer - The read buffer. The pass can access the result from the
-	 * previous pass from this buffer.
-	 * @param {number} deltaTime - The delta time in seconds.
-	 * @param {boolean} maskActive - Whether masking is active or not.
-	 */
-	render( renderer, writeBuffer, readBuffer /*, deltaTime, maskActive */ ) {
+               this.scene.overrideMaterial = this.overrideMaterial;
+          }
 
-		const oldAutoClear = renderer.autoClear;
-		renderer.autoClear = false;
+          if (this.clearColor !== null) {
+               renderer.getClearColor(this._oldClearColor);
+               renderer.setClearColor(this.clearColor, renderer.getClearAlpha());
+          }
 
-		let oldClearAlpha, oldOverrideMaterial;
+          if (this.clearAlpha !== null) {
+               oldClearAlpha = renderer.getClearAlpha();
+               renderer.setClearAlpha(this.clearAlpha);
+          }
 
-		if ( this.overrideMaterial !== null ) {
+          if (this.clearDepth == true) {
+               renderer.clearDepth();
+          }
 
-			oldOverrideMaterial = this.scene.overrideMaterial;
+          renderer.setRenderTarget(this.renderToScreen ? null : readBuffer);
 
-			this.scene.overrideMaterial = this.overrideMaterial;
+          if (this.clear === true) {
+               // TODO: Avoid using autoClear properties, see https://github.com/mrdoob/three.js/pull/15571#issuecomment-465669600
+               renderer.clear(renderer.autoClearColor, renderer.autoClearDepth, renderer.autoClearStencil);
+          }
 
-		}
+          renderer.render(this.scene, this.camera);
 
-		if ( this.clearColor !== null ) {
+          // restore
 
-			renderer.getClearColor( this._oldClearColor );
-			renderer.setClearColor( this.clearColor, renderer.getClearAlpha() );
+          if (this.clearColor !== null) {
+               renderer.setClearColor(this._oldClearColor);
+          }
 
-		}
+          if (this.clearAlpha !== null) {
+               renderer.setClearAlpha(oldClearAlpha);
+          }
 
-		if ( this.clearAlpha !== null ) {
+          if (this.overrideMaterial !== null) {
+               this.scene.overrideMaterial = oldOverrideMaterial;
+          }
 
-			oldClearAlpha = renderer.getClearAlpha();
-			renderer.setClearAlpha( this.clearAlpha );
-
-		}
-
-		if ( this.clearDepth == true ) {
-
-			renderer.clearDepth();
-
-		}
-
-		renderer.setRenderTarget( this.renderToScreen ? null : readBuffer );
-
-		if ( this.clear === true ) {
-
-			// TODO: Avoid using autoClear properties, see https://github.com/mrdoob/three.js/pull/15571#issuecomment-465669600
-			renderer.clear( renderer.autoClearColor, renderer.autoClearDepth, renderer.autoClearStencil );
-
-		}
-
-		renderer.render( this.scene, this.camera );
-
-		// restore
-
-		if ( this.clearColor !== null ) {
-
-			renderer.setClearColor( this._oldClearColor );
-
-		}
-
-		if ( this.clearAlpha !== null ) {
-
-			renderer.setClearAlpha( oldClearAlpha );
-
-		}
-
-		if ( this.overrideMaterial !== null ) {
-
-			this.scene.overrideMaterial = oldOverrideMaterial;
-
-		}
-
-		renderer.autoClear = oldAutoClear;
-
-	}
-
+          renderer.autoClear = oldAutoClear;
+     }
 }
 
 export { RenderPass };

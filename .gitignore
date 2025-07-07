@@ -1,2 +1,7 @@
 README.md
 **/*origami-test*
+**/*origami-move-test*
+
+package-lock.json
+package.json
+node_modules/

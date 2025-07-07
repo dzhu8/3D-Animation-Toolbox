@@ -1,19 +1,19 @@
 import {
-	Color,
-	Matrix4,
-	Mesh,
-	PerspectiveCamera,
-	ShaderMaterial,
-	UniformsUtils,
-	Vector2,
-	Vector3,
-	WebGLRenderTarget,
-	DepthTexture,
-	UnsignedShortType,
-	NearestFilter,
-	Plane,
-	HalfFloatType
-} from 'three';
+     Color,
+     Matrix4,
+     Mesh,
+     PerspectiveCamera,
+     ShaderMaterial,
+     UniformsUtils,
+     Vector2,
+     Vector3,
+     WebGLRenderTarget,
+     DepthTexture,
+     UnsignedShortType,
+     NearestFilter,
+     Plane,
+     HalfFloatType,
+} from "three";
 
 /**
  * A special version of {@link Reflector} for usage with {@link SSRPass}.
@@ -22,290 +22,257 @@ import {
  * @three_import import { ReflectorForSSRPass } from 'three/addons/objects/ReflectorForSSRPass.js';
  */
 class ReflectorForSSRPass extends Mesh {
+     /**
+      * Constructs a new reflector.
+      *
+      * @param {BufferGeometry} geometry - The reflector's geometry.
+      * @param {ReflectorForSSRPass~Options} [options] - The configuration options.
+      */
+     constructor(geometry, options = {}) {
+          super(geometry);
+
+          this.isReflectorForSSRPass = true;
+
+          this.type = "ReflectorForSSRPass";
+
+          const scope = this;
+
+          const color = options.color !== undefined ? new Color(options.color) : new Color(0x7f7f7f);
+          const textureWidth = options.textureWidth || 512;
+          const textureHeight = options.textureHeight || 512;
+          const clipBias = options.clipBias || 0;
+          const shader = options.shader || ReflectorForSSRPass.ReflectorShader;
+          const useDepthTexture = options.useDepthTexture === true;
+          const yAxis = new Vector3(0, 1, 0);
+          const vecTemp0 = new Vector3();
+          const vecTemp1 = new Vector3();
+
+          //
+
+          scope.needsUpdate = false;
+          scope.maxDistance = ReflectorForSSRPass.ReflectorShader.uniforms.maxDistance.value;
+          scope.opacity = ReflectorForSSRPass.ReflectorShader.uniforms.opacity.value;
+          scope.color = color;
+          scope.resolution = options.resolution || new Vector2(window.innerWidth, window.innerHeight);
+
+          scope._distanceAttenuation = ReflectorForSSRPass.ReflectorShader.defines.DISTANCE_ATTENUATION;
+          Object.defineProperty(scope, "distanceAttenuation", {
+               get() {
+                    return scope._distanceAttenuation;
+               },
+               set(val) {
+                    if (scope._distanceAttenuation === val) return;
+                    scope._distanceAttenuation = val;
+                    scope.material.defines.DISTANCE_ATTENUATION = val;
+                    scope.material.needsUpdate = true;
+               },
+          });
+
+          scope._fresnel = ReflectorForSSRPass.ReflectorShader.defines.FRESNEL;
+          Object.defineProperty(scope, "fresnel", {
+               get() {
+                    return scope._fresnel;
+               },
+               set(val) {
+                    if (scope._fresnel === val) return;
+                    scope._fresnel = val;
+                    scope.material.defines.FRESNEL = val;
+                    scope.material.needsUpdate = true;
+               },
+          });
+
+          const normal = new Vector3();
+          const reflectorWorldPosition = new Vector3();
+          const cameraWorldPosition = new Vector3();
+          const rotationMatrix = new Matrix4();
+          const lookAtPosition = new Vector3(0, 0, -1);
+
+          const view = new Vector3();
+          const target = new Vector3();
+
+          const textureMatrix = new Matrix4();
+          const virtualCamera = new PerspectiveCamera();
+
+          let depthTexture;
+
+          if (useDepthTexture) {
+               depthTexture = new DepthTexture();
+               depthTexture.type = UnsignedShortType;
+               depthTexture.minFilter = NearestFilter;
+               depthTexture.magFilter = NearestFilter;
+          }
+
+          const parameters = {
+               depthTexture: useDepthTexture ? depthTexture : null,
+               type: HalfFloatType,
+          };
+
+          const renderTarget = new WebGLRenderTarget(textureWidth, textureHeight, parameters);
+
+          const material = new ShaderMaterial({
+               name: shader.name !== undefined ? shader.name : "unspecified",
+               transparent: useDepthTexture,
+               defines: Object.assign({}, ReflectorForSSRPass.ReflectorShader.defines, {
+                    useDepthTexture,
+               }),
+               uniforms: UniformsUtils.clone(shader.uniforms),
+               fragmentShader: shader.fragmentShader,
+               vertexShader: shader.vertexShader,
+          });
+
+          material.uniforms["tDiffuse"].value = renderTarget.texture;
+          material.uniforms["color"].value = scope.color;
+          material.uniforms["textureMatrix"].value = textureMatrix;
+          if (useDepthTexture) {
+               material.uniforms["tDepth"].value = renderTarget.depthTexture;
+          }
 
-	/**
-	 * Constructs a new reflector.
-	 *
-	 * @param {BufferGeometry} geometry - The reflector's geometry.
-	 * @param {ReflectorForSSRPass~Options} [options] - The configuration options.
-	 */
-	constructor( geometry, options = {} ) {
+          this.material = material;
 
-		super( geometry );
+          const globalPlane = new Plane(new Vector3(0, 1, 0), clipBias);
+          const globalPlanes = [globalPlane];
 
-		this.isReflectorForSSRPass = true;
+          this.doRender = function (renderer, scene, camera) {
+               material.uniforms["maxDistance"].value = scope.maxDistance;
+               material.uniforms["color"].value = scope.color;
+               material.uniforms["opacity"].value = scope.opacity;
 
-		this.type = 'ReflectorForSSRPass';
+               vecTemp0.copy(camera.position).normalize();
+               vecTemp1.copy(vecTemp0).reflect(yAxis);
+               material.uniforms["fresnelCoe"].value = (vecTemp0.dot(vecTemp1) + 1) / 2; // TODO: Also need to use glsl viewPosition and viewNormal per pixel.
 
-		const scope = this;
+               reflectorWorldPosition.setFromMatrixPosition(scope.matrixWorld);
+               cameraWorldPosition.setFromMatrixPosition(camera.matrixWorld);
 
-		const color = ( options.color !== undefined ) ? new Color( options.color ) : new Color( 0x7F7F7F );
-		const textureWidth = options.textureWidth || 512;
-		const textureHeight = options.textureHeight || 512;
-		const clipBias = options.clipBias || 0;
-		const shader = options.shader || ReflectorForSSRPass.ReflectorShader;
-		const useDepthTexture = options.useDepthTexture === true;
-		const yAxis = new Vector3( 0, 1, 0 );
-		const vecTemp0 = new Vector3();
-		const vecTemp1 = new Vector3();
+               rotationMatrix.extractRotation(scope.matrixWorld);
 
-		//
+               normal.set(0, 0, 1);
+               normal.applyMatrix4(rotationMatrix);
 
-		scope.needsUpdate = false;
-		scope.maxDistance = ReflectorForSSRPass.ReflectorShader.uniforms.maxDistance.value;
-		scope.opacity = ReflectorForSSRPass.ReflectorShader.uniforms.opacity.value;
-		scope.color = color;
-		scope.resolution = options.resolution || new Vector2( window.innerWidth, window.innerHeight );
+               view.subVectors(reflectorWorldPosition, cameraWorldPosition);
 
+               // Avoid rendering when reflector is facing away
 
-		scope._distanceAttenuation = ReflectorForSSRPass.ReflectorShader.defines.DISTANCE_ATTENUATION;
-		Object.defineProperty( scope, 'distanceAttenuation', {
-			get() {
+               if (view.dot(normal) > 0) return;
 
-				return scope._distanceAttenuation;
+               view.reflect(normal).negate();
+               view.add(reflectorWorldPosition);
 
-			},
-			set( val ) {
+               rotationMatrix.extractRotation(camera.matrixWorld);
 
-				if ( scope._distanceAttenuation === val ) return;
-				scope._distanceAttenuation = val;
-				scope.material.defines.DISTANCE_ATTENUATION = val;
-				scope.material.needsUpdate = true;
+               lookAtPosition.set(0, 0, -1);
+               lookAtPosition.applyMatrix4(rotationMatrix);
+               lookAtPosition.add(cameraWorldPosition);
 
-			}
-		} );
+               target.subVectors(reflectorWorldPosition, lookAtPosition);
+               target.reflect(normal).negate();
+               target.add(reflectorWorldPosition);
 
-		scope._fresnel = ReflectorForSSRPass.ReflectorShader.defines.FRESNEL;
-		Object.defineProperty( scope, 'fresnel', {
-			get() {
+               virtualCamera.position.copy(view);
+               virtualCamera.up.set(0, 1, 0);
+               virtualCamera.up.applyMatrix4(rotationMatrix);
+               virtualCamera.up.reflect(normal);
+               virtualCamera.lookAt(target);
 
-				return scope._fresnel;
+               virtualCamera.far = camera.far; // Used in WebGLBackground
 
-			},
-			set( val ) {
+               virtualCamera.updateMatrixWorld();
+               virtualCamera.projectionMatrix.copy(camera.projectionMatrix);
 
-				if ( scope._fresnel === val ) return;
-				scope._fresnel = val;
-				scope.material.defines.FRESNEL = val;
-				scope.material.needsUpdate = true;
+               material.uniforms["virtualCameraNear"].value = camera.near;
+               material.uniforms["virtualCameraFar"].value = camera.far;
+               material.uniforms["virtualCameraMatrixWorld"].value = virtualCamera.matrixWorld;
+               material.uniforms["virtualCameraProjectionMatrix"].value = camera.projectionMatrix;
+               material.uniforms["virtualCameraProjectionMatrixInverse"].value = camera.projectionMatrixInverse;
+               material.uniforms["resolution"].value = scope.resolution;
 
-			}
-		} );
+               // Update the texture matrix
+               textureMatrix.set(0.5, 0.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.0, 0.5, 0.5, 0.0, 0.0, 0.0, 1.0);
+               textureMatrix.multiply(virtualCamera.projectionMatrix);
+               textureMatrix.multiply(virtualCamera.matrixWorldInverse);
+               textureMatrix.multiply(scope.matrixWorld);
 
-		const normal = new Vector3();
-		const reflectorWorldPosition = new Vector3();
-		const cameraWorldPosition = new Vector3();
-		const rotationMatrix = new Matrix4();
-		const lookAtPosition = new Vector3( 0, 0, - 1 );
+               // scope.visible = false;
 
-		const view = new Vector3();
-		const target = new Vector3();
+               const currentRenderTarget = renderer.getRenderTarget();
 
-		const textureMatrix = new Matrix4();
-		const virtualCamera = new PerspectiveCamera();
+               const currentXrEnabled = renderer.xr.enabled;
+               const currentShadowAutoUpdate = renderer.shadowMap.autoUpdate;
+               const currentClippingPlanes = renderer.clippingPlanes;
 
-		let depthTexture;
+               renderer.xr.enabled = false; // Avoid camera modification
+               renderer.shadowMap.autoUpdate = false; // Avoid re-computing shadows
+               renderer.clippingPlanes = globalPlanes;
 
-		if ( useDepthTexture ) {
+               renderer.setRenderTarget(renderTarget);
 
-			depthTexture = new DepthTexture();
-			depthTexture.type = UnsignedShortType;
-			depthTexture.minFilter = NearestFilter;
-			depthTexture.magFilter = NearestFilter;
+               renderer.state.buffers.depth.setMask(true); // make sure the depth buffer is writable so it can be properly cleared, see #18897
 
-		}
+               if (renderer.autoClear === false) renderer.clear();
+               renderer.render(scene, virtualCamera);
 
-		const parameters = {
-			depthTexture: useDepthTexture ? depthTexture : null,
-			type: HalfFloatType
-		};
+               renderer.xr.enabled = currentXrEnabled;
+               renderer.shadowMap.autoUpdate = currentShadowAutoUpdate;
+               renderer.clippingPlanes = currentClippingPlanes;
 
-		const renderTarget = new WebGLRenderTarget( textureWidth, textureHeight, parameters );
+               renderer.setRenderTarget(currentRenderTarget);
 
-		const material = new ShaderMaterial( {
-			name: ( shader.name !== undefined ) ? shader.name : 'unspecified',
-			transparent: useDepthTexture,
-			defines: Object.assign( {}, ReflectorForSSRPass.ReflectorShader.defines, {
-				useDepthTexture
-			} ),
-			uniforms: UniformsUtils.clone( shader.uniforms ),
-			fragmentShader: shader.fragmentShader,
-			vertexShader: shader.vertexShader
-		} );
+               // Restore viewport
 
-		material.uniforms[ 'tDiffuse' ].value = renderTarget.texture;
-		material.uniforms[ 'color' ].value = scope.color;
-		material.uniforms[ 'textureMatrix' ].value = textureMatrix;
-		if ( useDepthTexture ) {
+               const viewport = camera.viewport;
 
-			material.uniforms[ 'tDepth' ].value = renderTarget.depthTexture;
+               if (viewport !== undefined) {
+                    renderer.state.viewport(viewport);
+               }
 
-		}
+               // scope.visible = true;
+          };
 
-		this.material = material;
+          /**
+           * Returns the reflector's internal render target.
+           *
+           * @returns {WebGLRenderTarget} The internal render target
+           */
+          this.getRenderTarget = function () {
+               return renderTarget;
+          };
 
-		const globalPlane = new Plane( new Vector3( 0, 1, 0 ), clipBias );
-		const globalPlanes = [ globalPlane ];
-
-		this.doRender = function ( renderer, scene, camera ) {
-
-			material.uniforms[ 'maxDistance' ].value = scope.maxDistance;
-			material.uniforms[ 'color' ].value = scope.color;
-			material.uniforms[ 'opacity' ].value = scope.opacity;
-
-			vecTemp0.copy( camera.position ).normalize();
-			vecTemp1.copy( vecTemp0 ).reflect( yAxis );
-			material.uniforms[ 'fresnelCoe' ].value = ( vecTemp0.dot( vecTemp1 ) + 1. ) / 2.; // TODO: Also need to use glsl viewPosition and viewNormal per pixel.
-
-			reflectorWorldPosition.setFromMatrixPosition( scope.matrixWorld );
-			cameraWorldPosition.setFromMatrixPosition( camera.matrixWorld );
-
-			rotationMatrix.extractRotation( scope.matrixWorld );
-
-			normal.set( 0, 0, 1 );
-			normal.applyMatrix4( rotationMatrix );
-
-			view.subVectors( reflectorWorldPosition, cameraWorldPosition );
-
-			// Avoid rendering when reflector is facing away
-
-			if ( view.dot( normal ) > 0 ) return;
-
-			view.reflect( normal ).negate();
-			view.add( reflectorWorldPosition );
-
-			rotationMatrix.extractRotation( camera.matrixWorld );
-
-			lookAtPosition.set( 0, 0, - 1 );
-			lookAtPosition.applyMatrix4( rotationMatrix );
-			lookAtPosition.add( cameraWorldPosition );
-
-			target.subVectors( reflectorWorldPosition, lookAtPosition );
-			target.reflect( normal ).negate();
-			target.add( reflectorWorldPosition );
-
-			virtualCamera.position.copy( view );
-			virtualCamera.up.set( 0, 1, 0 );
-			virtualCamera.up.applyMatrix4( rotationMatrix );
-			virtualCamera.up.reflect( normal );
-			virtualCamera.lookAt( target );
-
-			virtualCamera.far = camera.far; // Used in WebGLBackground
-
-			virtualCamera.updateMatrixWorld();
-			virtualCamera.projectionMatrix.copy( camera.projectionMatrix );
-
-			material.uniforms[ 'virtualCameraNear' ].value = camera.near;
-			material.uniforms[ 'virtualCameraFar' ].value = camera.far;
-			material.uniforms[ 'virtualCameraMatrixWorld' ].value = virtualCamera.matrixWorld;
-			material.uniforms[ 'virtualCameraProjectionMatrix' ].value = camera.projectionMatrix;
-			material.uniforms[ 'virtualCameraProjectionMatrixInverse' ].value = camera.projectionMatrixInverse;
-			material.uniforms[ 'resolution' ].value = scope.resolution;
-
-			// Update the texture matrix
-			textureMatrix.set(
-				0.5, 0.0, 0.0, 0.5,
-				0.0, 0.5, 0.0, 0.5,
-				0.0, 0.0, 0.5, 0.5,
-				0.0, 0.0, 0.0, 1.0
-			);
-			textureMatrix.multiply( virtualCamera.projectionMatrix );
-			textureMatrix.multiply( virtualCamera.matrixWorldInverse );
-			textureMatrix.multiply( scope.matrixWorld );
-
-			// scope.visible = false;
-
-			const currentRenderTarget = renderer.getRenderTarget();
-
-			const currentXrEnabled = renderer.xr.enabled;
-			const currentShadowAutoUpdate = renderer.shadowMap.autoUpdate;
-			const currentClippingPlanes = renderer.clippingPlanes;
-
-			renderer.xr.enabled = false; // Avoid camera modification
-			renderer.shadowMap.autoUpdate = false; // Avoid re-computing shadows
-			renderer.clippingPlanes = globalPlanes;
-
-			renderer.setRenderTarget( renderTarget );
-
-			renderer.state.buffers.depth.setMask( true ); // make sure the depth buffer is writable so it can be properly cleared, see #18897
-
-			if ( renderer.autoClear === false ) renderer.clear();
-			renderer.render( scene, virtualCamera );
-
-			renderer.xr.enabled = currentXrEnabled;
-			renderer.shadowMap.autoUpdate = currentShadowAutoUpdate;
-			renderer.clippingPlanes = currentClippingPlanes;
-
-			renderer.setRenderTarget( currentRenderTarget );
-
-			// Restore viewport
-
-			const viewport = camera.viewport;
-
-			if ( viewport !== undefined ) {
-
-				renderer.state.viewport( viewport );
-
-			}
-
-			// scope.visible = true;
-
-		};
-
-		/**
-		 * Returns the reflector's internal render target.
-		 *
-		 * @return {WebGLRenderTarget} The internal render target
-		 */
-		this.getRenderTarget = function () {
-
-			return renderTarget;
-
-		};
-
-		/**
-		 * Frees the GPU-related resources allocated by this instance. Call this
-		 * method whenever this instance is no longer used in your app.
-		 */
-		this.dispose = function () {
-
-			renderTarget.dispose();
-			scope.material.dispose();
-
-		};
-
-	}
-
+          /**
+           * Frees the GPU-related resources allocated by this instance. Call this method whenever this instance is no
+           * longer used in your app.
+           */
+          this.dispose = function () {
+               renderTarget.dispose();
+               scope.material.dispose();
+          };
+     }
 }
 
 ReflectorForSSRPass.ReflectorShader = {
+     name: "ReflectorShader",
 
-	name: 'ReflectorShader',
+     defines: {
+          DISTANCE_ATTENUATION: true,
+          FRESNEL: true,
+     },
 
-	defines: {
-		DISTANCE_ATTENUATION: true,
-		FRESNEL: true,
-	},
+     uniforms: {
+          color: { value: null },
+          tDiffuse: { value: null },
+          tDepth: { value: null },
+          textureMatrix: { value: new Matrix4() },
+          maxDistance: { value: 180 },
+          opacity: { value: 0.5 },
+          fresnelCoe: { value: null },
+          virtualCameraNear: { value: null },
+          virtualCameraFar: { value: null },
+          virtualCameraProjectionMatrix: { value: new Matrix4() },
+          virtualCameraMatrixWorld: { value: new Matrix4() },
+          virtualCameraProjectionMatrixInverse: { value: new Matrix4() },
+          resolution: { value: new Vector2() },
+     },
 
-	uniforms: {
-
-		color: { value: null },
-		tDiffuse: { value: null },
-		tDepth: { value: null },
-		textureMatrix: { value: new Matrix4() },
-		maxDistance: { value: 180 },
-		opacity: { value: 0.5 },
-		fresnelCoe: { value: null },
-		virtualCameraNear: { value: null },
-		virtualCameraFar: { value: null },
-		virtualCameraProjectionMatrix: { value: new Matrix4() },
-		virtualCameraMatrixWorld: { value: new Matrix4() },
-		virtualCameraProjectionMatrixInverse: { value: new Matrix4() },
-		resolution: { value: new Vector2() },
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 		uniform mat4 textureMatrix;
 		varying vec4 vUv;
 
@@ -317,7 +284,7 @@ ReflectorForSSRPass.ReflectorShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 		uniform vec3 color;
 		uniform sampler2D tDiffuse;
 		uniform sampler2D tDepth;
@@ -381,12 +348,15 @@ ReflectorForSSRPass.ReflectorShader = {
  * Constructor options of `ReflectorForSSRPass`.
  *
  * @typedef {Object} ReflectorForSSRPass~Options
- * @property {number|Color|string} [color=0x7F7F7F] - The reflector's color.
- * @property {number} [textureWidth=512] - The texture width. A higher value results in more clear reflections but is also more expensive.
- * @property {number} [textureHeight=512] - The texture height. A higher value results in more clear reflections but is also more expensive.
- * @property {number} [clipBias=0] - The clip bias.
- * @property {Object} [shader] - Can be used to pass in a custom shader that defines how the reflective view is projected onto the reflector's geometry.
- * @property {boolean} [useDepthTexture=true] - Whether to store depth values in a texture or not.
- **/
+ * @property {number | Color | string} [color=0x7F7F7F] - The reflector's color. Default is `0x7F7F7F`
+ * @property {number} [textureWidth=512] - The texture width. A higher value results in more clear reflections but is
+ *   also more expensive. Default is `512`
+ * @property {number} [textureHeight=512] - The texture height. A higher value results in more clear reflections but is
+ *   also more expensive. Default is `512`
+ * @property {number} [clipBias=0] - The clip bias. Default is `0`
+ * @property {Object} [shader] - Can be used to pass in a custom shader that defines how the reflective view is
+ *   projected onto the reflector's geometry.
+ * @property {boolean} [useDepthTexture=true] - Whether to store depth values in a texture or not. Default is `true`
+ */
 
 export { ReflectorForSSRPass };

@@ -1,16 +1,15 @@
-import { LineSegments2 } from '../lines/LineSegments2.js';
-import { LineGeometry } from '../lines/LineGeometry.js';
-import { LineMaterial } from '../lines/LineMaterial.js';
+import { LineSegments2 } from "../lines/LineSegments2.js";
+import { LineGeometry } from "../lines/LineGeometry.js";
+import { LineMaterial } from "../lines/LineMaterial.js";
 
 /**
  * A polyline drawn between vertices.
  *
- * This adds functionality beyond {@link Line}, like arbitrary line width and changing width to
- * be in world units.It extends {@link LineSegments2}, simplifying constructing segments from a
- * chain of points.
+ * This adds functionality beyond {@link Line}, like arbitrary line width and changing width to be in world units.It
+ * extends {@link LineSegments2}, simplifying constructing segments from a chain of points.
  *
- * This module can only be used with {@link WebGLRenderer}. When using {@link WebGPURenderer},
- * import the class from `lines/webgpu/Line2.js`.
+ * This module can only be used with {@link WebGLRenderer}. When using {@link WebGPURenderer}, import the class from
+ * `lines/webgpu/Line2.js`.
  *
  * ```js
  * const geometry = new LineGeometry();
@@ -27,30 +26,26 @@ import { LineMaterial } from '../lines/LineMaterial.js';
  * @three_import import { Line2 } from 'three/addons/lines/Line2.js';
  */
 class Line2 extends LineSegments2 {
+     /**
+      * Constructs a new wide line.
+      *
+      * @param {LineGeometry} [geometry] - The line geometry.
+      * @param {LineMaterial} [material] - The line material.
+      */
+     constructor(geometry = new LineGeometry(), material = new LineMaterial({ color: Math.random() * 0xffffff })) {
+          super(geometry, material);
 
-	/**
-	 * Constructs a new wide line.
-	 *
-	 * @param {LineGeometry} [geometry] - The line geometry.
-	 * @param {LineMaterial} [material] - The line material.
-	 */
-	constructor( geometry = new LineGeometry(), material = new LineMaterial( { color: Math.random() * 0xffffff } ) ) {
+          /**
+           * This flag can be used for type testing.
+           *
+           * @default true
+           * @type {boolean}
+           * @readonly
+           */
+          this.isLine2 = true;
 
-		super( geometry, material );
-
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isLine2 = true;
-
-		this.type = 'Line2';
-
-	}
-
+          this.type = "Line2";
+     }
 }
 
 export { Line2 };

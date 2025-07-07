@@ -4,30 +4,25 @@
  */
 
 /**
- * RGB Shift Shader
- * Shifts red and blue channels from center in opposite directions
- * Ported from https://web.archive.org/web/20090820185047/http://kriss.cx/tom/2009/05/rgb-shift/
- * by Tom Butterworth / https://web.archive.org/web/20090810054752/http://kriss.cx/tom/
+ * RGB Shift Shader Shifts red and blue channels from center in opposite directions Ported from
+ * https://web.archive.org/web/20090820185047/http://kriss.cx/tom/2009/05/rgb-shift/ by Tom Butterworth /
+ * https://web.archive.org/web/20090810054752/http://kriss.cx/tom/
  *
- * amount: shift distance (1 is width of input)
- * angle: shift angle in radians
+ * Amount: shift distance (1 is width of input) angle: shift angle in radians
  *
  * @constant
  * @type {ShaderMaterial~Shader}
  */
 const RGBShiftShader = {
+     name: "RGBShiftShader",
 
-	name: 'RGBShiftShader',
+     uniforms: {
+          tDiffuse: { value: null },
+          amount: { value: 0.005 },
+          angle: { value: 0.0 },
+     },
 
-	uniforms: {
-
-		'tDiffuse': { value: null },
-		'amount': { value: 0.005 },
-		'angle': { value: 0.0 }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -38,7 +33,7 @@ const RGBShiftShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform sampler2D tDiffuse;
 		uniform float amount;
@@ -54,8 +49,7 @@ const RGBShiftShader = {
 			vec4 cb = texture2D(tDiffuse, vUv - offset);
 			gl_FragColor = vec4(cr.r, cga.g, cb.b, cga.a);
 
-		}`
-
+		}`,
 };
 
 export { RGBShiftShader };

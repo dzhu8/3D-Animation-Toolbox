@@ -1,280 +1,266 @@
 import {
-	Color,
-	Matrix4,
-	Mesh,
-	PerspectiveCamera,
-	Plane,
-	ShaderMaterial,
-	UniformsUtils,
-	Vector3,
-	Vector4,
-	WebGLRenderTarget,
-	HalfFloatType
-} from 'three';
+     Color,
+     Matrix4,
+     Mesh,
+     PerspectiveCamera,
+     Plane,
+     ShaderMaterial,
+     UniformsUtils,
+     Vector3,
+     Vector4,
+     WebGLRenderTarget,
+     HalfFloatType,
+} from "three";
 
 /**
  * Can be used to create a flat, reflective surface like a mirror.
  *
- * Note that this class can only be used with {@link WebGLRenderer}.
- * When using {@link WebGPURenderer}, use {@link ReflectorNode}.
+ * Note that this class can only be used with {@link WebGLRenderer}. When using {@link WebGPURenderer}, use
+ * {@link ReflectorNode}.
  *
  * ```js
- * const geometry = new THREE.PlaneGeometry( 100, 100 );
+ * const geometry = new THREE.PlaneGeometry(100, 100);
  *
- * const reflector = new Reflector( geometry, {
- * 	clipBias: 0.003,
- * 	textureWidth: window.innerWidth * window.devicePixelRatio,
- * 	textureHeight: window.innerHeight * window.devicePixelRatio,
- * 	color: 0xc1cbcb
- * } );
+ * const reflector = new Reflector(geometry, {
+ *      clipBias: 0.003,
+ *      textureWidth: window.innerWidth * window.devicePixelRatio,
+ *      textureHeight: window.innerHeight * window.devicePixelRatio,
+ *      color: 0xc1cbcb,
+ * });
  *
- * scene.add( reflector );
+ * scene.add(reflector);
  * ```
  *
  * @augments Mesh
  * @three_import import { Reflector } from 'three/addons/objects/Reflector.js';
  */
 class Reflector extends Mesh {
+     /**
+      * Constructs a new reflector.
+      *
+      * @param {BufferGeometry} geometry - The reflector's geometry.
+      * @param {Reflector~Options} [options] - The configuration options.
+      */
+     constructor(geometry, options = {}) {
+          super(geometry);
 
-	/**
-	 * Constructs a new reflector.
-	 *
-	 * @param {BufferGeometry} geometry - The reflector's geometry.
-	 * @param {Reflector~Options} [options] - The configuration options.
-	 */
-	constructor( geometry, options = {} ) {
+          /**
+           * This flag can be used for type testing.
+           *
+           * @default true
+           * @type {boolean}
+           * @readonly
+           */
+          this.isReflector = true;
 
-		super( geometry );
+          this.type = "Reflector";
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isReflector = true;
+          /**
+           * Whether to force an update, no matter if the reflector is in view or not.
+           *
+           * @default false
+           * @type {boolean}
+           */
+          this.forceUpdate = false;
 
-		this.type = 'Reflector';
+          /**
+           * The reflector's virtual camera. This is used to render the scene from the mirror's point of view.
+           *
+           * @type {PerspectiveCamera}
+           */
+          this.camera = new PerspectiveCamera();
 
-		/**
-		 * Whether to force an update, no matter if the reflector
-		 * is in view or not.
-		 *
-		 * @type {boolean}
-		 * @default false
-		 */
-		this.forceUpdate = false;
+          const scope = this;
 
-		/**
-		 * The reflector's virtual camera. This is used to render
-		 * the scene from the mirror's point of view.
-		 *
-		 * @type {PerspectiveCamera}
-		 */
-		this.camera = new PerspectiveCamera();
+          const color = options.color !== undefined ? new Color(options.color) : new Color(0x7f7f7f);
+          const textureWidth = options.textureWidth || 512;
+          const textureHeight = options.textureHeight || 512;
+          const clipBias = options.clipBias || 0;
+          const shader = options.shader || Reflector.ReflectorShader;
+          const multisample = options.multisample !== undefined ? options.multisample : 4;
 
-		const scope = this;
+          //
 
-		const color = ( options.color !== undefined ) ? new Color( options.color ) : new Color( 0x7F7F7F );
-		const textureWidth = options.textureWidth || 512;
-		const textureHeight = options.textureHeight || 512;
-		const clipBias = options.clipBias || 0;
-		const shader = options.shader || Reflector.ReflectorShader;
-		const multisample = ( options.multisample !== undefined ) ? options.multisample : 4;
+          const reflectorPlane = new Plane();
+          const normal = new Vector3();
+          const reflectorWorldPosition = new Vector3();
+          const cameraWorldPosition = new Vector3();
+          const rotationMatrix = new Matrix4();
+          const lookAtPosition = new Vector3(0, 0, -1);
+          const clipPlane = new Vector4();
 
-		//
+          const view = new Vector3();
+          const target = new Vector3();
+          const q = new Vector4();
 
-		const reflectorPlane = new Plane();
-		const normal = new Vector3();
-		const reflectorWorldPosition = new Vector3();
-		const cameraWorldPosition = new Vector3();
-		const rotationMatrix = new Matrix4();
-		const lookAtPosition = new Vector3( 0, 0, - 1 );
-		const clipPlane = new Vector4();
+          const textureMatrix = new Matrix4();
+          const virtualCamera = this.camera;
 
-		const view = new Vector3();
-		const target = new Vector3();
-		const q = new Vector4();
+          const renderTarget = new WebGLRenderTarget(textureWidth, textureHeight, {
+               samples: multisample,
+               type: HalfFloatType,
+          });
 
-		const textureMatrix = new Matrix4();
-		const virtualCamera = this.camera;
+          const material = new ShaderMaterial({
+               name: shader.name !== undefined ? shader.name : "unspecified",
+               uniforms: UniformsUtils.clone(shader.uniforms),
+               fragmentShader: shader.fragmentShader,
+               vertexShader: shader.vertexShader,
+          });
 
-		const renderTarget = new WebGLRenderTarget( textureWidth, textureHeight, { samples: multisample, type: HalfFloatType } );
+          material.uniforms["tDiffuse"].value = renderTarget.texture;
+          material.uniforms["color"].value = color;
+          material.uniforms["textureMatrix"].value = textureMatrix;
 
-		const material = new ShaderMaterial( {
-			name: ( shader.name !== undefined ) ? shader.name : 'unspecified',
-			uniforms: UniformsUtils.clone( shader.uniforms ),
-			fragmentShader: shader.fragmentShader,
-			vertexShader: shader.vertexShader
-		} );
+          this.material = material;
 
-		material.uniforms[ 'tDiffuse' ].value = renderTarget.texture;
-		material.uniforms[ 'color' ].value = color;
-		material.uniforms[ 'textureMatrix' ].value = textureMatrix;
+          this.onBeforeRender = function (renderer, scene, camera) {
+               reflectorWorldPosition.setFromMatrixPosition(scope.matrixWorld);
+               cameraWorldPosition.setFromMatrixPosition(camera.matrixWorld);
 
-		this.material = material;
+               rotationMatrix.extractRotation(scope.matrixWorld);
 
-		this.onBeforeRender = function ( renderer, scene, camera ) {
+               normal.set(0, 0, 1);
+               normal.applyMatrix4(rotationMatrix);
 
-			reflectorWorldPosition.setFromMatrixPosition( scope.matrixWorld );
-			cameraWorldPosition.setFromMatrixPosition( camera.matrixWorld );
+               view.subVectors(reflectorWorldPosition, cameraWorldPosition);
 
-			rotationMatrix.extractRotation( scope.matrixWorld );
+               // Avoid rendering when reflector is facing away unless forcing an update
+               const isFacingAway = view.dot(normal) > 0;
 
-			normal.set( 0, 0, 1 );
-			normal.applyMatrix4( rotationMatrix );
+               if (isFacingAway === true && this.forceUpdate === false) return;
 
-			view.subVectors( reflectorWorldPosition, cameraWorldPosition );
+               view.reflect(normal).negate();
+               view.add(reflectorWorldPosition);
 
-			// Avoid rendering when reflector is facing away unless forcing an update
-			const isFacingAway = view.dot( normal ) > 0;
+               rotationMatrix.extractRotation(camera.matrixWorld);
 
-			if ( isFacingAway === true && this.forceUpdate === false ) return;
+               lookAtPosition.set(0, 0, -1);
+               lookAtPosition.applyMatrix4(rotationMatrix);
+               lookAtPosition.add(cameraWorldPosition);
 
-			view.reflect( normal ).negate();
-			view.add( reflectorWorldPosition );
+               target.subVectors(reflectorWorldPosition, lookAtPosition);
+               target.reflect(normal).negate();
+               target.add(reflectorWorldPosition);
 
-			rotationMatrix.extractRotation( camera.matrixWorld );
+               virtualCamera.position.copy(view);
+               virtualCamera.up.set(0, 1, 0);
+               virtualCamera.up.applyMatrix4(rotationMatrix);
+               virtualCamera.up.reflect(normal);
+               virtualCamera.lookAt(target);
 
-			lookAtPosition.set( 0, 0, - 1 );
-			lookAtPosition.applyMatrix4( rotationMatrix );
-			lookAtPosition.add( cameraWorldPosition );
+               virtualCamera.far = camera.far; // Used in WebGLBackground
 
-			target.subVectors( reflectorWorldPosition, lookAtPosition );
-			target.reflect( normal ).negate();
-			target.add( reflectorWorldPosition );
+               virtualCamera.updateMatrixWorld();
+               virtualCamera.projectionMatrix.copy(camera.projectionMatrix);
 
-			virtualCamera.position.copy( view );
-			virtualCamera.up.set( 0, 1, 0 );
-			virtualCamera.up.applyMatrix4( rotationMatrix );
-			virtualCamera.up.reflect( normal );
-			virtualCamera.lookAt( target );
+               // Update the texture matrix
+               textureMatrix.set(0.5, 0.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.0, 0.5, 0.5, 0.0, 0.0, 0.0, 1.0);
+               textureMatrix.multiply(virtualCamera.projectionMatrix);
+               textureMatrix.multiply(virtualCamera.matrixWorldInverse);
+               textureMatrix.multiply(scope.matrixWorld);
 
-			virtualCamera.far = camera.far; // Used in WebGLBackground
+               // Now update projection matrix with new clip plane, implementing code from: http://www.terathon.com/code/oblique.html
+               // Paper explaining this technique: http://www.terathon.com/lengyel/Lengyel-Oblique.pdf
+               reflectorPlane.setFromNormalAndCoplanarPoint(normal, reflectorWorldPosition);
+               reflectorPlane.applyMatrix4(virtualCamera.matrixWorldInverse);
 
-			virtualCamera.updateMatrixWorld();
-			virtualCamera.projectionMatrix.copy( camera.projectionMatrix );
+               clipPlane.set(
+                    reflectorPlane.normal.x,
+                    reflectorPlane.normal.y,
+                    reflectorPlane.normal.z,
+                    reflectorPlane.constant
+               );
 
-			// Update the texture matrix
-			textureMatrix.set(
-				0.5, 0.0, 0.0, 0.5,
-				0.0, 0.5, 0.0, 0.5,
-				0.0, 0.0, 0.5, 0.5,
-				0.0, 0.0, 0.0, 1.0
-			);
-			textureMatrix.multiply( virtualCamera.projectionMatrix );
-			textureMatrix.multiply( virtualCamera.matrixWorldInverse );
-			textureMatrix.multiply( scope.matrixWorld );
+               const projectionMatrix = virtualCamera.projectionMatrix;
 
-			// Now update projection matrix with new clip plane, implementing code from: http://www.terathon.com/code/oblique.html
-			// Paper explaining this technique: http://www.terathon.com/lengyel/Lengyel-Oblique.pdf
-			reflectorPlane.setFromNormalAndCoplanarPoint( normal, reflectorWorldPosition );
-			reflectorPlane.applyMatrix4( virtualCamera.matrixWorldInverse );
+               q.x = (Math.sign(clipPlane.x) + projectionMatrix.elements[8]) / projectionMatrix.elements[0];
+               q.y = (Math.sign(clipPlane.y) + projectionMatrix.elements[9]) / projectionMatrix.elements[5];
+               q.z = -1.0;
+               q.w = (1.0 + projectionMatrix.elements[10]) / projectionMatrix.elements[14];
 
-			clipPlane.set( reflectorPlane.normal.x, reflectorPlane.normal.y, reflectorPlane.normal.z, reflectorPlane.constant );
+               // Calculate the scaled plane vector
+               clipPlane.multiplyScalar(2.0 / clipPlane.dot(q));
 
-			const projectionMatrix = virtualCamera.projectionMatrix;
+               // Replacing the third row of the projection matrix
+               projectionMatrix.elements[2] = clipPlane.x;
+               projectionMatrix.elements[6] = clipPlane.y;
+               projectionMatrix.elements[10] = clipPlane.z + 1.0 - clipBias;
+               projectionMatrix.elements[14] = clipPlane.w;
 
-			q.x = ( Math.sign( clipPlane.x ) + projectionMatrix.elements[ 8 ] ) / projectionMatrix.elements[ 0 ];
-			q.y = ( Math.sign( clipPlane.y ) + projectionMatrix.elements[ 9 ] ) / projectionMatrix.elements[ 5 ];
-			q.z = - 1.0;
-			q.w = ( 1.0 + projectionMatrix.elements[ 10 ] ) / projectionMatrix.elements[ 14 ];
+               // Render
+               scope.visible = false;
 
-			// Calculate the scaled plane vector
-			clipPlane.multiplyScalar( 2.0 / clipPlane.dot( q ) );
+               const currentRenderTarget = renderer.getRenderTarget();
 
-			// Replacing the third row of the projection matrix
-			projectionMatrix.elements[ 2 ] = clipPlane.x;
-			projectionMatrix.elements[ 6 ] = clipPlane.y;
-			projectionMatrix.elements[ 10 ] = clipPlane.z + 1.0 - clipBias;
-			projectionMatrix.elements[ 14 ] = clipPlane.w;
+               const currentXrEnabled = renderer.xr.enabled;
+               const currentShadowAutoUpdate = renderer.shadowMap.autoUpdate;
 
-			// Render
-			scope.visible = false;
+               renderer.xr.enabled = false; // Avoid camera modification
+               renderer.shadowMap.autoUpdate = false; // Avoid re-computing shadows
 
-			const currentRenderTarget = renderer.getRenderTarget();
+               renderer.setRenderTarget(renderTarget);
 
-			const currentXrEnabled = renderer.xr.enabled;
-			const currentShadowAutoUpdate = renderer.shadowMap.autoUpdate;
+               renderer.state.buffers.depth.setMask(true); // make sure the depth buffer is writable so it can be properly cleared, see #18897
 
-			renderer.xr.enabled = false; // Avoid camera modification
-			renderer.shadowMap.autoUpdate = false; // Avoid re-computing shadows
+               if (renderer.autoClear === false) renderer.clear();
+               renderer.render(scene, virtualCamera);
 
-			renderer.setRenderTarget( renderTarget );
+               renderer.xr.enabled = currentXrEnabled;
+               renderer.shadowMap.autoUpdate = currentShadowAutoUpdate;
 
-			renderer.state.buffers.depth.setMask( true ); // make sure the depth buffer is writable so it can be properly cleared, see #18897
+               renderer.setRenderTarget(currentRenderTarget);
 
-			if ( renderer.autoClear === false ) renderer.clear();
-			renderer.render( scene, virtualCamera );
+               // Restore viewport
 
-			renderer.xr.enabled = currentXrEnabled;
-			renderer.shadowMap.autoUpdate = currentShadowAutoUpdate;
+               const viewport = camera.viewport;
 
-			renderer.setRenderTarget( currentRenderTarget );
+               if (viewport !== undefined) {
+                    renderer.state.viewport(viewport);
+               }
 
-			// Restore viewport
+               scope.visible = true;
+               this.forceUpdate = false;
+          };
 
-			const viewport = camera.viewport;
+          /**
+           * Returns the reflector's internal render target.
+           *
+           * @returns {WebGLRenderTarget} The internal render target
+           */
+          this.getRenderTarget = function () {
+               return renderTarget;
+          };
 
-			if ( viewport !== undefined ) {
-
-				renderer.state.viewport( viewport );
-
-			}
-
-			scope.visible = true;
-			this.forceUpdate = false;
-
-		};
-
-		/**
-		 * Returns the reflector's internal render target.
-		 *
-		 * @return {WebGLRenderTarget} The internal render target
-		 */
-		this.getRenderTarget = function () {
-
-			return renderTarget;
-
-		};
-
-		/**
-		 * Frees the GPU-related resources allocated by this instance. Call this
-		 * method whenever this instance is no longer used in your app.
-		 */
-		this.dispose = function () {
-
-			renderTarget.dispose();
-			scope.material.dispose();
-
-		};
-
-	}
-
+          /**
+           * Frees the GPU-related resources allocated by this instance. Call this method whenever this instance is no
+           * longer used in your app.
+           */
+          this.dispose = function () {
+               renderTarget.dispose();
+               scope.material.dispose();
+          };
+     }
 }
 
 Reflector.ReflectorShader = {
+     name: "ReflectorShader",
 
-	name: 'ReflectorShader',
+     uniforms: {
+          color: {
+               value: null,
+          },
 
-	uniforms: {
+          tDiffuse: {
+               value: null,
+          },
 
-		'color': {
-			value: null
-		},
+          textureMatrix: {
+               value: null,
+          },
+     },
 
-		'tDiffuse': {
-			value: null
-		},
-
-		'textureMatrix': {
-			value: null
-		}
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 		uniform mat4 textureMatrix;
 		varying vec4 vUv;
 
@@ -291,7 +277,7 @@ Reflector.ReflectorShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 		uniform vec3 color;
 		uniform sampler2D tDiffuse;
 		varying vec4 vUv;
@@ -320,19 +306,22 @@ Reflector.ReflectorShader = {
 			#include <tonemapping_fragment>
 			#include <colorspace_fragment>
 
-		}`
+		}`,
 };
 
 /**
  * Constructor options of `Reflector`.
  *
  * @typedef {Object} Reflector~Options
- * @property {number|Color|string} [color=0x7F7F7F] - The reflector's color.
- * @property {number} [textureWidth=512] - The texture width. A higher value results in more clear reflections but is also more expensive.
- * @property {number} [textureHeight=512] - The texture height. A higher value results in more clear reflections but is also more expensive.
- * @property {number} [clipBias=0] - The clip bias.
- * @property {Object} [shader] - Can be used to pass in a custom shader that defines how the reflective view is projected onto the reflector's geometry.
- * @property {number} [multisample=4] - How many samples to use for MSAA. `0` disables MSAA.
- **/
+ * @property {number | Color | string} [color=0x7F7F7F] - The reflector's color. Default is `0x7F7F7F`
+ * @property {number} [textureWidth=512] - The texture width. A higher value results in more clear reflections but is
+ *   also more expensive. Default is `512`
+ * @property {number} [textureHeight=512] - The texture height. A higher value results in more clear reflections but is
+ *   also more expensive. Default is `512`
+ * @property {number} [clipBias=0] - The clip bias. Default is `0`
+ * @property {Object} [shader] - Can be used to pass in a custom shader that defines how the reflective view is
+ *   projected onto the reflector's geometry.
+ * @property {number} [multisample=4] - How many samples to use for MSAA. `0` disables MSAA. Default is `4`
+ */
 
 export { Reflector };

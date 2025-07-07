@@ -4,26 +4,22 @@
  */
 
 /**
- * Brightness and contrast adjustment {@link https://github.com/evanw/glfx.js}.
- * Brightness: -1 to 1 (-1 is solid black, 0 is no change, and 1 is solid white)
- * Contrast: -1 to 1 (-1 is solid gray, 0 is no change, and 1 is maximum contrast)
+ * Brightness and contrast adjustment {@link https://github.com/evanw/glfx.js}. Brightness: -1 to 1 (-1 is solid black, 0
+ * is no change, and 1 is solid white) Contrast: -1 to 1 (-1 is solid gray, 0 is no change, and 1 is maximum contrast)
  *
  * @constant
  * @type {ShaderMaterial~Shader}
  */
 const BrightnessContrastShader = {
+     name: "BrightnessContrastShader",
 
-	name: 'BrightnessContrastShader',
+     uniforms: {
+          tDiffuse: { value: null },
+          brightness: { value: 0 },
+          contrast: { value: 0 },
+     },
 
-	uniforms: {
-
-		'tDiffuse': { value: null },
-		'brightness': { value: 0 },
-		'contrast': { value: 0 }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -35,7 +31,7 @@ const BrightnessContrastShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform sampler2D tDiffuse;
 		uniform float brightness;
@@ -55,8 +51,7 @@ const BrightnessContrastShader = {
 				gl_FragColor.rgb = (gl_FragColor.rgb - 0.5) * (1.0 + contrast) + 0.5;
 			}
 
-		}`
-
+		}`,
 };
 
 export { BrightnessContrastShader };

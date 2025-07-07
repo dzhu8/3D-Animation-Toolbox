@@ -1,28 +1,24 @@
-
 /**
  * @module BleachBypassShader
  * @three_import import { BleachBypassShader } from 'three/addons/shaders/BleachBypassShader.js';
  */
 
 /**
- * Bleach bypass shader [http://en.wikipedia.org/wiki/Bleach_bypass] based on
- * [Nvidia Shader library]{@link http://developer.download.nvidia.com/shaderlibrary/webpages/shader_library.html#post_bleach_bypass}.
+ * Bleach bypass shader [http://en.wikipedia.org/wiki/Bleach_bypass] based on [Nvidia Shader
+ * library]{@link http://developer.download.nvidia.com/shaderlibrary/webpages/shader_library.html#post_bleach_bypass}.
  *
  * @constant
  * @type {ShaderMaterial~Shader}
  */
 const BleachBypassShader = {
+     name: "BleachBypassShader",
 
-	name: 'BleachBypassShader',
+     uniforms: {
+          tDiffuse: { value: null },
+          opacity: { value: 1.0 },
+     },
 
-	uniforms: {
-
-		'tDiffuse': { value: null },
-		'opacity': { value: 1.0 }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -33,7 +29,7 @@ const BleachBypassShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform float opacity;
 
@@ -61,8 +57,7 @@ const BleachBypassShader = {
 
 			gl_FragColor = vec4( mixRGB, base.a );
 
-		}`
-
+		}`,
 };
 
 export { BleachBypassShader };

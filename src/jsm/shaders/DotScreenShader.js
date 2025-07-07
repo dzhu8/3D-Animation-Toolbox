@@ -1,6 +1,4 @@
-import {
-	Vector2
-} from 'three';
+import { Vector2 } from "three";
 
 /**
  * @module DotScreenShader
@@ -14,20 +12,17 @@ import {
  * @type {ShaderMaterial~Shader}
  */
 const DotScreenShader = {
+     name: "DotScreenShader",
 
-	name: 'DotScreenShader',
+     uniforms: {
+          tDiffuse: { value: null },
+          tSize: { value: new Vector2(256, 256) },
+          center: { value: new Vector2(0.5, 0.5) },
+          angle: { value: 1.57 },
+          scale: { value: 1.0 },
+     },
 
-	uniforms: {
-
-		'tDiffuse': { value: null },
-		'tSize': { value: new Vector2( 256, 256 ) },
-		'center': { value: new Vector2( 0.5, 0.5 ) },
-		'angle': { value: 1.57 },
-		'scale': { value: 1.0 }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -38,7 +33,7 @@ const DotScreenShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform vec2 center;
 		uniform float angle;
@@ -68,8 +63,7 @@ const DotScreenShader = {
 
 			gl_FragColor = vec4( vec3( average * 10.0 - 5.0 + pattern() ), color.a );
 
-		}`
-
+		}`,
 };
 
 export { DotScreenShader };

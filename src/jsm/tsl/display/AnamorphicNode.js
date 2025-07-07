@@ -1,5 +1,19 @@
-import { RenderTarget, Vector2, TempNode, QuadMesh, NodeMaterial, RendererUtils } from 'three/webgpu';
-import { nodeObject, Fn, float, NodeUpdateType, uv, passTexture, uniform, convertToTexture, vec2, vec3, Loop, mix, luminance } from 'three/tsl';
+import { RenderTarget, Vector2, TempNode, QuadMesh, NodeMaterial, RendererUtils } from "three/webgpu";
+import {
+     nodeObject,
+     Fn,
+     float,
+     NodeUpdateType,
+     uv,
+     passTexture,
+     uniform,
+     convertToTexture,
+     vec2,
+     vec3,
+     Loop,
+     mix,
+     luminance,
+} from "three/tsl";
 
 const _quadMesh = /*@__PURE__*/ new QuadMesh();
 
@@ -12,247 +26,228 @@ let _rendererState;
  * @three_import import { anamorphic } from 'three/addons/tsl/display/AnamorphicNode.js';
  */
 class AnamorphicNode extends TempNode {
+     static get type() {
+          return "AnamorphicNode";
+     }
+
+     /**
+      * Constructs a new anamorphic node.
+      *
+      * @param {TextureNode} textureNode - The texture node that represents the input of the effect.
+      * @param {Node<float>} thresholdNode - The threshold is one option to control the intensity and size of the
+      *   effect.
+      * @param {Node<float>} scaleNode - Defines the vertical scale of the flares.
+      * @param {number} samples - More samples result in larger flares and a more expensive runtime behavior.
+      */
+     constructor(textureNode, thresholdNode, scaleNode, samples) {
+          super("vec4");
+
+          /**
+           * The texture node that represents the input of the effect.
+           *
+           * @type {TextureNode}
+           */
+          this.textureNode = textureNode;
+
+          /**
+           * The threshold is one option to control the intensity and size of the effect.
+           *
+           * @type {Node<float>}
+           */
+          this.thresholdNode = thresholdNode;
+
+          /**
+           * Defines the vertical scale of the flares.
+           *
+           * @type {Node<float>}
+           */
+          this.scaleNode = scaleNode;
+
+          /**
+           * The color of the flares.
+           *
+           * @type {Node<vec3>}
+           */
+          this.colorNode = vec3(0.1, 0.0, 1.0);
+
+          /**
+           * More samples result in larger flares and a more expensive runtime behavior.
+           *
+           * @type {Node<float>}
+           */
+          this.samples = samples;
+
+          /**
+           * The resolution scale.
+           *
+           * @type {Vector2}
+           */
+          this.resolution = new Vector2(1, 1);
+
+          /**
+           * The internal render target of the effect.
+           *
+           * @private
+           * @type {RenderTarget}
+           */
+          this._renderTarget = new RenderTarget(1, 1, { depthBuffer: false });
+          this._renderTarget.texture.name = "anamorphic";
+
+          /**
+           * A uniform node holding the inverse resolution value.
+           *
+           * @private
+           * @type {UniformNode<vec2>}
+           */
+          this._invSize = uniform(new Vector2());
+
+          /**
+           * The result of the effect is represented as a separate texture node.
+           *
+           * @private
+           * @type {PassTextureNode}
+           */
+          this._textureNode = passTexture(this, this._renderTarget.texture);
+
+          /**
+           * The `updateBeforeType` is set to `NodeUpdateType.FRAME` since the node renders its effect once per frame in
+           * `updateBefore()`.
+           *
+           * @default "frame"
+           * @type {string}
+           */
+          this.updateBeforeType = NodeUpdateType.FRAME;
+     }
+
+     /**
+      * Returns the result of the effect as a texture node.
+      *
+      * @returns {PassTextureNode} A texture node that represents the result of the effect.
+      */
+     getTextureNode() {
+          return this._textureNode;
+     }
 
-	static get type() {
-
-		return 'AnamorphicNode';
-
-	}
-
-	/**
-	 * Constructs a new anamorphic node.
-	 *
-	 * @param {TextureNode} textureNode - The texture node that represents the input of the effect.
-	 * @param {Node<float>} thresholdNode - The threshold is one option to control the intensity and size of the effect.
-	 * @param {Node<float>} scaleNode - Defines the vertical scale of the flares.
-	 * @param {number} samples - More samples result in larger flares and a more expensive runtime behavior.
-	 */
-	constructor( textureNode, thresholdNode, scaleNode, samples ) {
-
-		super( 'vec4' );
-
-		/**
-		 * The texture node that represents the input of the effect.
-		 *
-		 * @type {TextureNode}
-		 */
-		this.textureNode = textureNode;
-
-		/**
-		 * The threshold is one option to control the intensity and size of the effect.
-		 *
-		 * @type {Node<float>}
-		 */
-		this.thresholdNode = thresholdNode;
-
-		/**
-		 * Defines the vertical scale of the flares.
-		 *
-		 * @type {Node<float>}
-		 */
-		this.scaleNode = scaleNode;
-
-		/**
-		 * The color of the flares.
-		 *
-		 * @type {Node<vec3>}
-		 */
-		this.colorNode = vec3( 0.1, 0.0, 1.0 );
-
-		/**
-		 * More samples result in larger flares and a more expensive runtime behavior.
-		 *
-		 * @type {Node<float>}
-		 */
-		this.samples = samples;
-
-		/**
-		 * The resolution scale.
-		 *
-		 * @type {Vector2}
-		 */
-		this.resolution = new Vector2( 1, 1 );
-
-		/**
-		 * The internal render target of the effect.
-		 *
-		 * @private
-		 * @type {RenderTarget}
-		 */
-		this._renderTarget = new RenderTarget( 1, 1, { depthBuffer: false } );
-		this._renderTarget.texture.name = 'anamorphic';
-
-		/**
-		 * A uniform node holding the inverse resolution value.
-		 *
-		 * @private
-		 * @type {UniformNode<vec2>}
-		 */
-		this._invSize = uniform( new Vector2() );
-
-		/**
-		 * The result of the effect is represented as a separate texture node.
-		 *
-		 * @private
-		 * @type {PassTextureNode}
-		 */
-		this._textureNode = passTexture( this, this._renderTarget.texture );
+     /**
+      * Sets the size of the effect.
+      *
+      * @param {number} width - The width of the effect.
+      * @param {number} height - The height of the effect.
+      */
+     setSize(width, height) {
+          this._invSize.value.set(1 / width, 1 / height);
 
-		/**
-		 * The `updateBeforeType` is set to `NodeUpdateType.FRAME` since the node renders
-		 * its effect once per frame in `updateBefore()`.
-		 *
-		 * @type {string}
-		 * @default 'frame'
-		 */
-		this.updateBeforeType = NodeUpdateType.FRAME;
+          width = Math.max(Math.round(width * this.resolution.x), 1);
+          height = Math.max(Math.round(height * this.resolution.y), 1);
 
-	}
+          this._renderTarget.setSize(width, height);
+     }
 
-	/**
-	 * Returns the result of the effect as a texture node.
-	 *
-	 * @return {PassTextureNode} A texture node that represents the result of the effect.
-	 */
-	getTextureNode() {
+     /**
+      * This method is used to render the effect once per frame.
+      *
+      * @param {NodeFrame} frame - The current node frame.
+      */
+     updateBefore(frame) {
+          const { renderer } = frame;
 
-		return this._textureNode;
+          _rendererState = RendererUtils.resetRendererState(renderer, _rendererState);
 
-	}
+          //
 
-	/**
-	 * Sets the size of the effect.
-	 *
-	 * @param {number} width - The width of the effect.
-	 * @param {number} height - The height of the effect.
-	 */
-	setSize( width, height ) {
+          const textureNode = this.textureNode;
+          const map = textureNode.value;
 
-		this._invSize.value.set( 1 / width, 1 / height );
+          this._renderTarget.texture.type = map.type;
 
-		width = Math.max( Math.round( width * this.resolution.x ), 1 );
-		height = Math.max( Math.round( height * this.resolution.y ), 1 );
+          const currentTexture = textureNode.value;
 
-		this._renderTarget.setSize( width, height );
+          _quadMesh.material = this._material;
 
-	}
+          this.setSize(map.image.width, map.image.height);
 
-	/**
-	 * This method is used to render the effect once per frame.
-	 *
-	 * @param {NodeFrame} frame - The current node frame.
-	 */
-	updateBefore( frame ) {
+          // render
 
-		const { renderer } = frame;
+          renderer.setRenderTarget(this._renderTarget);
 
-		_rendererState = RendererUtils.resetRendererState( renderer, _rendererState );
+          _quadMesh.render(renderer);
 
-		//
+          // restore
 
-		const textureNode = this.textureNode;
-		const map = textureNode.value;
+          textureNode.value = currentTexture;
 
-		this._renderTarget.texture.type = map.type;
+          RendererUtils.restoreRendererState(renderer, _rendererState);
+     }
 
-		const currentTexture = textureNode.value;
+     /**
+      * This method is used to setup the effect's TSL code.
+      *
+      * @param {NodeBuilder} builder - The current node builder.
+      * @returns {PassTextureNode}
+      */
+     setup(builder) {
+          const textureNode = this.textureNode;
+          const uvNode = textureNode.uvNode || uv();
 
-		_quadMesh.material = this._material;
+          const sampleTexture = (uv) => textureNode.sample(uv);
 
-		this.setSize( map.image.width, map.image.height );
+          const threshold = (color, threshold) => mix(vec3(0.0), color, luminance(color).sub(threshold).max(0));
 
-		// render
+          const anamorph = Fn(() => {
+               const samples = this.samples;
+               const halfSamples = Math.floor(samples / 2);
 
-		renderer.setRenderTarget( this._renderTarget );
+               const total = vec3(0).toVar();
 
-		_quadMesh.render( renderer );
+               Loop({ start: -halfSamples, end: halfSamples }, ({ i }) => {
+                    const softness = float(i).abs().div(halfSamples).oneMinus();
 
-		// restore
+                    const uv = vec2(uvNode.x.add(this._invSize.x.mul(i).mul(this.scaleNode)), uvNode.y);
+                    const color = sampleTexture(uv);
+                    const pass = threshold(color, this.thresholdNode).mul(softness);
 
-		textureNode.value = currentTexture;
+                    total.addAssign(pass);
+               });
 
-		RendererUtils.restoreRendererState( renderer, _rendererState );
+               return total.mul(this.colorNode);
+          });
 
-	}
+          //
 
-	/**
-	 * This method is used to setup the effect's TSL code.
-	 *
-	 * @param {NodeBuilder} builder - The current node builder.
-	 * @return {PassTextureNode}
-	 */
-	setup( builder ) {
+          const material = this._material || (this._material = new NodeMaterial());
+          material.name = "Anamorphic";
+          material.fragmentNode = anamorph();
 
-		const textureNode = this.textureNode;
-		const uvNode = textureNode.uvNode || uv();
+          //
 
-		const sampleTexture = ( uv ) => textureNode.sample( uv );
+          const properties = builder.getNodeProperties(this);
+          properties.textureNode = textureNode;
 
-		const threshold = ( color, threshold ) => mix( vec3( 0.0 ), color, luminance( color ).sub( threshold ).max( 0 ) );
+          //
 
-		const anamorph = Fn( () => {
+          return this._textureNode;
+     }
 
-			const samples = this.samples;
-			const halfSamples = Math.floor( samples / 2 );
-
-			const total = vec3( 0 ).toVar();
-
-			Loop( { start: - halfSamples, end: halfSamples }, ( { i } ) => {
-
-				const softness = float( i ).abs().div( halfSamples ).oneMinus();
-
-				const uv = vec2( uvNode.x.add( this._invSize.x.mul( i ).mul( this.scaleNode ) ), uvNode.y );
-				const color = sampleTexture( uv );
-				const pass = threshold( color, this.thresholdNode ).mul( softness );
-
-				total.addAssign( pass );
-
-			} );
-
-			return total.mul( this.colorNode );
-
-		} );
-
-		//
-
-		const material = this._material || ( this._material = new NodeMaterial() );
-		material.name = 'Anamorphic';
-		material.fragmentNode = anamorph();
-
-		//
-
-		const properties = builder.getNodeProperties( this );
-		properties.textureNode = textureNode;
-
-		//
-
-		return this._textureNode;
-
-	}
-
-	/**
-	 * Frees internal resources. This method should be called
-	 * when the effect is no longer required.
-	 */
-	dispose() {
-
-		this._renderTarget.dispose();
-
-	}
-
+     /** Frees internal resources. This method should be called when the effect is no longer required. */
+     dispose() {
+          this._renderTarget.dispose();
+     }
 }
 
 /**
  * TSL function for creating an anamorphic flare effect.
  *
- * @tsl
  * @function
  * @param {TextureNode} node - The node that represents the input of the effect.
- * @param {Node<float> | number} [threshold=0.9] - The threshold is one option to control the intensity and size of the effect.
- * @param {Node<float> | number} [scale=3] - Defines the vertical scale of the flares.
- * @param {number} [samples=32] - More samples result in larger flares and a more expensive runtime behavior.
+ * @param {Node<float> | number} [threshold=0.9] - The threshold is one option to control the intensity and size of the
+ *   effect. Default is `0.9`
+ * @param {Node<float> | number} [scale=3] - Defines the vertical scale of the flares. Default is `3`
+ * @param {number} [samples=32] - More samples result in larger flares and a more expensive runtime behavior. Default is
+ *   `32`
  * @returns {AnamorphicNode}
+ * @tsl
  */
-export const anamorphic = ( node, threshold = .9, scale = 3, samples = 32 ) => nodeObject( new AnamorphicNode( convertToTexture( node ), nodeObject( threshold ), nodeObject( scale ), samples ) );
+export const anamorphic = (node, threshold = 0.9, scale = 3, samples = 32) =>
+     nodeObject(new AnamorphicNode(convertToTexture(node), nodeObject(threshold), nodeObject(scale), samples));
 
 export default AnamorphicNode;

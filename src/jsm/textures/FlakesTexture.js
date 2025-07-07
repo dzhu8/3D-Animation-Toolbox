@@ -1,54 +1,50 @@
 /**
- * Utility class for generating a flakes texture image. This image might be used
- * as a normal map to produce a car paint like effect.
+ * Utility class for generating a flakes texture image. This image might be used as a normal map to produce a car paint
+ * like effect.
  *
  * @three_import import { FlakesTexture } from 'three/addons/textures/FlakesTexture.js';
  */
 class FlakesTexture {
+     /**
+      * Generates a new flakes texture image. The result is a canvas that can be used as an input for
+      * {@link CanvasTexture}.
+      *
+      * @param {number} [width=512] - The width of the image. Default is `512`
+      * @param {number} [height=512] - The height of the image. Default is `512`
+      * @returns {HTMLCanvasElement} The generated image.
+      */
+     constructor(width = 512, height = 512) {
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
 
-	/**
-	 * Generates a new flakes texture image. The result is a canvas
-	 * that can be used as an input for {@link CanvasTexture}.
-	 *
-	 * @param {number} [width=512] - The width of the image.
-	 * @param {number} [height=512] - The height of the image.
-	 * @return {HTMLCanvasElement} The generated image.
-	 */
-	constructor( width = 512, height = 512 ) {
+          const context = canvas.getContext("2d");
+          context.fillStyle = "rgb(127,127,255)";
+          context.fillRect(0, 0, width, height);
 
-		const canvas = document.createElement( 'canvas' );
-		canvas.width = width;
-		canvas.height = height;
+          for (let i = 0; i < 4000; i++) {
+               const x = Math.random() * width;
+               const y = Math.random() * height;
+               const r = Math.random() * 3 + 3;
 
-		const context = canvas.getContext( '2d' );
-		context.fillStyle = 'rgb(127,127,255)';
-		context.fillRect( 0, 0, width, height );
+               let nx = Math.random() * 2 - 1;
+               let ny = Math.random() * 2 - 1;
+               let nz = 1.5;
 
-		for ( let i = 0; i < 4000; i ++ ) {
+               const l = Math.sqrt(nx * nx + ny * ny + nz * nz);
 
-			const x = Math.random() * width;
-			const y = Math.random() * height;
-			const r = Math.random() * 3 + 3;
+               nx /= l;
+               ny /= l;
+               nz /= l;
 
-			let nx = Math.random() * 2 - 1;
-			let ny = Math.random() * 2 - 1;
-			let nz = 1.5;
+               context.fillStyle = "rgb(" + (nx * 127 + 127) + "," + (ny * 127 + 127) + "," + nz * 255 + ")";
+               context.beginPath();
+               context.arc(x, y, r, 0, Math.PI * 2);
+               context.fill();
+          }
 
-			const l = Math.sqrt( nx * nx + ny * ny + nz * nz );
-
-			nx /= l; ny /= l; nz /= l;
-
-			context.fillStyle = 'rgb(' + ( nx * 127 + 127 ) + ',' + ( ny * 127 + 127 ) + ',' + ( nz * 255 ) + ')';
-			context.beginPath();
-			context.arc( x, y, r, 0, Math.PI * 2 );
-			context.fill();
-
-		}
-
-		return canvas;
-
-	}
-
+          return canvas;
+     }
 }
 
 export { FlakesTexture };

@@ -1,6 +1,4 @@
-import {
-	Vector2
-} from 'three';
+import { Vector2 } from "three";
 
 /**
  * @module BokehShader2
@@ -8,8 +6,8 @@ import {
  */
 
 /**
- * Depth-of-field shader with bokeh ported from
- * [GLSL shader by Martins Upitis]{@link http://blenderartists.org/forum/showthread.php?237488-GLSL-depth-of-field-with-bokeh-v2-4-(update)}.
+ * Depth-of-field shader with bokeh ported from [GLSL shader by Martins
+ * Upitis]{@link http://blenderartists.org/forum/showthread.php?237488-GLSL-depth-of-field-with-bokeh-v2-4-(update)}.
  *
  * Requires #define RINGS and SAMPLES integers
  *
@@ -17,47 +15,43 @@ import {
  * @type {ShaderMaterial~Shader}
  */
 const BokehShader = {
+     name: "BokehShader",
 
-	name: 'BokehShader',
+     uniforms: {
+          textureWidth: { value: 1.0 },
+          textureHeight: { value: 1.0 },
 
-	uniforms: {
+          focalDepth: { value: 1.0 },
+          focalLength: { value: 24.0 },
+          fstop: { value: 0.9 },
 
-		'textureWidth': { value: 1.0 },
-		'textureHeight': { value: 1.0 },
+          tColor: { value: null },
+          tDepth: { value: null },
 
-		'focalDepth': { value: 1.0 },
-		'focalLength': { value: 24.0 },
-		'fstop': { value: 0.9 },
+          maxblur: { value: 1.0 },
 
-		'tColor': { value: null },
-		'tDepth': { value: null },
+          showFocus: { value: 0 },
+          manualdof: { value: 0 },
+          vignetting: { value: 0 },
+          depthblur: { value: 0 },
 
-		'maxblur': { value: 1.0 },
+          threshold: { value: 0.5 },
+          gain: { value: 2.0 },
+          bias: { value: 0.5 },
+          fringe: { value: 0.7 },
 
-		'showFocus': { value: 0 },
-		'manualdof': { value: 0 },
-		'vignetting': { value: 0 },
-		'depthblur': { value: 0 },
+          znear: { value: 0.1 },
+          zfar: { value: 100 },
 
-		'threshold': { value: 0.5 },
-		'gain': { value: 2.0 },
-		'bias': { value: 0.5 },
-		'fringe': { value: 0.7 },
+          noise: { value: 1 },
+          dithering: { value: 0.0001 },
+          pentagon: { value: 0 },
 
-		'znear': { value: 0.1 },
-		'zfar': { value: 100 },
+          shaderFocus: { value: 1 },
+          focusCoords: { value: new Vector2() },
+     },
 
-		'noise': { value: 1 },
-		'dithering': { value: 0.0001 },
-		'pentagon': { value: 0 },
-
-		'shaderFocus': { value: 1 },
-		'focusCoords': { value: new Vector2() }
-
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -68,7 +62,7 @@ const BokehShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		#include <common>
 
@@ -357,22 +351,18 @@ const BokehShader = {
 
 			#include <tonemapping_fragment>
 			#include <colorspace_fragment>
-		}`
-
+		}`,
 };
 
 const BokehDepthShader = {
+     name: "BokehDepthShader",
 
-	name: 'BokehDepthShader',
+     uniforms: {
+          mNear: { value: 1.0 },
+          mFar: { value: 1000.0 },
+     },
 
-	uniforms: {
-
-		'mNear': { value: 1.0 },
-		'mFar': { value: 1000.0 },
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying float vViewZDepth;
 
@@ -385,7 +375,7 @@ const BokehDepthShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform float mNear;
 		uniform float mFar;
@@ -397,8 +387,7 @@ const BokehDepthShader = {
 			float color = 1.0 - smoothstep( mNear, mFar, vViewZDepth );
 			gl_FragColor = vec4( vec3( color ), 1.0 );
 
-		}`
-
+		}`,
 };
 
 export { BokehShader, BokehDepthShader };

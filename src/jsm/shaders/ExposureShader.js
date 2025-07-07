@@ -10,17 +10,14 @@
  * @type {ShaderMaterial~Shader}
  */
 const ExposureShader = {
+     name: "ExposureShader",
 
-	name: 'ExposureShader',
+     uniforms: {
+          tDiffuse: { value: null },
+          exposure: { value: 1.0 },
+     },
 
-	uniforms: {
-
-		'tDiffuse': { value: null },
-		'exposure': { value: 1.0 }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -31,7 +28,7 @@ const ExposureShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform float exposure;
 
@@ -44,8 +41,7 @@ const ExposureShader = {
 			gl_FragColor = texture2D( tDiffuse, vUv );
 			gl_FragColor.rgb *= exposure;
 
-		}`
-
+		}`,
 };
 
 export { ExposureShader };

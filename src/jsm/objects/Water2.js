@@ -1,26 +1,26 @@
 import {
-	Clock,
-	Color,
-	Matrix4,
-	Mesh,
-	RepeatWrapping,
-	ShaderMaterial,
-	TextureLoader,
-	UniformsLib,
-	UniformsUtils,
-	Vector2,
-	Vector4
-} from 'three';
-import { Reflector } from '../objects/Reflector.js';
-import { Refractor } from '../objects/Refractor.js';
+     Clock,
+     Color,
+     Matrix4,
+     Mesh,
+     RepeatWrapping,
+     ShaderMaterial,
+     TextureLoader,
+     UniformsLib,
+     UniformsUtils,
+     Vector2,
+     Vector4,
+} from "three";
+import { Reflector } from "../objects/Reflector.js";
+import { Refractor } from "../objects/Refractor.js";
 
 /** @module Water2 */
 
 /**
  * An advanced water effect that supports reflections, refractions and flow maps.
  *
- * Note that this class can only be used with {@link WebGLRenderer}.
- * When using {@link WebGPURenderer}, use {@link module:Water2Mesh}.
+ * Note that this class can only be used with {@link WebGLRenderer}. When using {@link WebGPURenderer}, use
+ * {@link module:Water2Mesh}.
  *
  * References:
  *
@@ -31,250 +31,217 @@ import { Refractor } from '../objects/Refractor.js';
  * @three_import import { Water } from 'three/addons/objects/Water2.js';
  */
 class Water extends Mesh {
+     /**
+      * Constructs a new water instance.
+      *
+      * @param {BufferGeometry} geometry - The water's geometry.
+      * @param {module:Water2~Options} [options] - The configuration options.
+      */
+     constructor(geometry, options = {}) {
+          super(geometry);
 
-	/**
-	 * Constructs a new water instance.
-	 *
-	 * @param {BufferGeometry} geometry - The water's geometry.
-	 * @param {module:Water2~Options} [options] - The configuration options.
-	 */
-	constructor( geometry, options = {} ) {
+          /**
+           * This flag can be used for type testing.
+           *
+           * @default true
+           * @type {boolean}
+           * @readonly
+           */
+          this.isWater = true;
 
-		super( geometry );
+          this.type = "Water";
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isWater = true;
+          const scope = this;
 
-		this.type = 'Water';
+          const color = options.color !== undefined ? new Color(options.color) : new Color(0xffffff);
+          const textureWidth = options.textureWidth !== undefined ? options.textureWidth : 512;
+          const textureHeight = options.textureHeight !== undefined ? options.textureHeight : 512;
+          const clipBias = options.clipBias !== undefined ? options.clipBias : 0;
+          const flowDirection = options.flowDirection !== undefined ? options.flowDirection : new Vector2(1, 0);
+          const flowSpeed = options.flowSpeed !== undefined ? options.flowSpeed : 0.03;
+          const reflectivity = options.reflectivity !== undefined ? options.reflectivity : 0.02;
+          const scale = options.scale !== undefined ? options.scale : 1;
+          const shader = options.shader !== undefined ? options.shader : Water.WaterShader;
 
-		const scope = this;
+          const textureLoader = new TextureLoader();
 
-		const color = ( options.color !== undefined ) ? new Color( options.color ) : new Color( 0xFFFFFF );
-		const textureWidth = options.textureWidth !== undefined ? options.textureWidth : 512;
-		const textureHeight = options.textureHeight !== undefined ? options.textureHeight : 512;
-		const clipBias = options.clipBias !== undefined ? options.clipBias : 0;
-		const flowDirection = options.flowDirection !== undefined ? options.flowDirection : new Vector2( 1, 0 );
-		const flowSpeed = options.flowSpeed !== undefined ? options.flowSpeed : 0.03;
-		const reflectivity = options.reflectivity !== undefined ? options.reflectivity : 0.02;
-		const scale = options.scale !== undefined ? options.scale : 1;
-		const shader = options.shader !== undefined ? options.shader : Water.WaterShader;
+          const flowMap = options.flowMap || undefined;
+          const normalMap0 = options.normalMap0 || textureLoader.load("textures/water/Water_1_M_Normal.jpg");
+          const normalMap1 = options.normalMap1 || textureLoader.load("textures/water/Water_2_M_Normal.jpg");
 
-		const textureLoader = new TextureLoader();
+          const cycle = 0.15; // a cycle of a flow map phase
+          const halfCycle = cycle * 0.5;
+          const textureMatrix = new Matrix4();
+          const clock = new Clock();
 
-		const flowMap = options.flowMap || undefined;
-		const normalMap0 = options.normalMap0 || textureLoader.load( 'textures/water/Water_1_M_Normal.jpg' );
-		const normalMap1 = options.normalMap1 || textureLoader.load( 'textures/water/Water_2_M_Normal.jpg' );
+          // internal components
 
-		const cycle = 0.15; // a cycle of a flow map phase
-		const halfCycle = cycle * 0.5;
-		const textureMatrix = new Matrix4();
-		const clock = new Clock();
+          if (Reflector === undefined) {
+               console.error("THREE.Water: Required component Reflector not found.");
+               return;
+          }
 
-		// internal components
+          if (Refractor === undefined) {
+               console.error("THREE.Water: Required component Refractor not found.");
+               return;
+          }
 
-		if ( Reflector === undefined ) {
+          const reflector = new Reflector(geometry, {
+               textureWidth: textureWidth,
+               textureHeight: textureHeight,
+               clipBias: clipBias,
+          });
 
-			console.error( 'THREE.Water: Required component Reflector not found.' );
-			return;
+          const refractor = new Refractor(geometry, {
+               textureWidth: textureWidth,
+               textureHeight: textureHeight,
+               clipBias: clipBias,
+          });
 
-		}
+          reflector.matrixAutoUpdate = false;
+          refractor.matrixAutoUpdate = false;
 
-		if ( Refractor === undefined ) {
+          // material
 
-			console.error( 'THREE.Water: Required component Refractor not found.' );
-			return;
+          this.material = new ShaderMaterial({
+               name: shader.name,
+               uniforms: UniformsUtils.merge([UniformsLib["fog"], shader.uniforms]),
+               vertexShader: shader.vertexShader,
+               fragmentShader: shader.fragmentShader,
+               transparent: true,
+               fog: true,
+          });
 
-		}
+          if (flowMap !== undefined) {
+               this.material.defines.USE_FLOWMAP = "";
+               this.material.uniforms["tFlowMap"] = {
+                    type: "t",
+                    value: flowMap,
+               };
+          } else {
+               this.material.uniforms["flowDirection"] = {
+                    type: "v2",
+                    value: flowDirection,
+               };
+          }
 
-		const reflector = new Reflector( geometry, {
-			textureWidth: textureWidth,
-			textureHeight: textureHeight,
-			clipBias: clipBias
-		} );
+          // maps
 
-		const refractor = new Refractor( geometry, {
-			textureWidth: textureWidth,
-			textureHeight: textureHeight,
-			clipBias: clipBias
-		} );
+          normalMap0.wrapS = normalMap0.wrapT = RepeatWrapping;
+          normalMap1.wrapS = normalMap1.wrapT = RepeatWrapping;
 
-		reflector.matrixAutoUpdate = false;
-		refractor.matrixAutoUpdate = false;
+          this.material.uniforms["tReflectionMap"].value = reflector.getRenderTarget().texture;
+          this.material.uniforms["tRefractionMap"].value = refractor.getRenderTarget().texture;
+          this.material.uniforms["tNormalMap0"].value = normalMap0;
+          this.material.uniforms["tNormalMap1"].value = normalMap1;
 
-		// material
+          // water
 
-		this.material = new ShaderMaterial( {
-			name: shader.name,
-			uniforms: UniformsUtils.merge( [
-				UniformsLib[ 'fog' ],
-				shader.uniforms
-			] ),
-			vertexShader: shader.vertexShader,
-			fragmentShader: shader.fragmentShader,
-			transparent: true,
-			fog: true
-		} );
+          this.material.uniforms["color"].value = color;
+          this.material.uniforms["reflectivity"].value = reflectivity;
+          this.material.uniforms["textureMatrix"].value = textureMatrix;
 
-		if ( flowMap !== undefined ) {
+          // initial values
 
-			this.material.defines.USE_FLOWMAP = '';
-			this.material.uniforms[ 'tFlowMap' ] = {
-				type: 't',
-				value: flowMap
-			};
+          this.material.uniforms["config"].value.x = 0; // flowMapOffset0
+          this.material.uniforms["config"].value.y = halfCycle; // flowMapOffset1
+          this.material.uniforms["config"].value.z = halfCycle; // halfCycle
+          this.material.uniforms["config"].value.w = scale; // scale
 
-		} else {
+          // functions
 
-			this.material.uniforms[ 'flowDirection' ] = {
-				type: 'v2',
-				value: flowDirection
-			};
+          function updateTextureMatrix(camera) {
+               textureMatrix.set(0.5, 0.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.0, 0.5, 0.5, 0.0, 0.0, 0.0, 1.0);
 
-		}
+               textureMatrix.multiply(camera.projectionMatrix);
+               textureMatrix.multiply(camera.matrixWorldInverse);
+               textureMatrix.multiply(scope.matrixWorld);
+          }
 
-		// maps
+          function updateFlow() {
+               const delta = clock.getDelta();
+               const config = scope.material.uniforms["config"];
 
-		normalMap0.wrapS = normalMap0.wrapT = RepeatWrapping;
-		normalMap1.wrapS = normalMap1.wrapT = RepeatWrapping;
+               config.value.x += flowSpeed * delta; // flowMapOffset0
+               config.value.y = config.value.x + halfCycle; // flowMapOffset1
 
-		this.material.uniforms[ 'tReflectionMap' ].value = reflector.getRenderTarget().texture;
-		this.material.uniforms[ 'tRefractionMap' ].value = refractor.getRenderTarget().texture;
-		this.material.uniforms[ 'tNormalMap0' ].value = normalMap0;
-		this.material.uniforms[ 'tNormalMap1' ].value = normalMap1;
+               // Important: The distance between offsets should be always the value of "halfCycle".
+               // Moreover, both offsets should be in the range of [ 0, cycle ].
+               // This approach ensures a smooth water flow and avoids "reset" effects.
 
-		// water
+               if (config.value.x >= cycle) {
+                    config.value.x = 0;
+                    config.value.y = halfCycle;
+               } else if (config.value.y >= cycle) {
+                    config.value.y = config.value.y - cycle;
+               }
+          }
 
-		this.material.uniforms[ 'color' ].value = color;
-		this.material.uniforms[ 'reflectivity' ].value = reflectivity;
-		this.material.uniforms[ 'textureMatrix' ].value = textureMatrix;
+          //
 
-		// initial values
+          this.onBeforeRender = function (renderer, scene, camera) {
+               updateTextureMatrix(camera);
+               updateFlow();
 
-		this.material.uniforms[ 'config' ].value.x = 0; // flowMapOffset0
-		this.material.uniforms[ 'config' ].value.y = halfCycle; // flowMapOffset1
-		this.material.uniforms[ 'config' ].value.z = halfCycle; // halfCycle
-		this.material.uniforms[ 'config' ].value.w = scale; // scale
+               scope.visible = false;
 
-		// functions
+               reflector.matrixWorld.copy(scope.matrixWorld);
+               refractor.matrixWorld.copy(scope.matrixWorld);
 
-		function updateTextureMatrix( camera ) {
+               reflector.onBeforeRender(renderer, scene, camera);
+               refractor.onBeforeRender(renderer, scene, camera);
 
-			textureMatrix.set(
-				0.5, 0.0, 0.0, 0.5,
-				0.0, 0.5, 0.0, 0.5,
-				0.0, 0.0, 0.5, 0.5,
-				0.0, 0.0, 0.0, 1.0
-			);
-
-			textureMatrix.multiply( camera.projectionMatrix );
-			textureMatrix.multiply( camera.matrixWorldInverse );
-			textureMatrix.multiply( scope.matrixWorld );
-
-		}
-
-		function updateFlow() {
-
-			const delta = clock.getDelta();
-			const config = scope.material.uniforms[ 'config' ];
-
-			config.value.x += flowSpeed * delta; // flowMapOffset0
-			config.value.y = config.value.x + halfCycle; // flowMapOffset1
-
-			// Important: The distance between offsets should be always the value of "halfCycle".
-			// Moreover, both offsets should be in the range of [ 0, cycle ].
-			// This approach ensures a smooth water flow and avoids "reset" effects.
-
-			if ( config.value.x >= cycle ) {
-
-				config.value.x = 0;
-				config.value.y = halfCycle;
-
-			} else if ( config.value.y >= cycle ) {
-
-				config.value.y = config.value.y - cycle;
-
-			}
-
-		}
-
-		//
-
-		this.onBeforeRender = function ( renderer, scene, camera ) {
-
-			updateTextureMatrix( camera );
-			updateFlow();
-
-			scope.visible = false;
-
-			reflector.matrixWorld.copy( scope.matrixWorld );
-			refractor.matrixWorld.copy( scope.matrixWorld );
-
-			reflector.onBeforeRender( renderer, scene, camera );
-			refractor.onBeforeRender( renderer, scene, camera );
-
-			scope.visible = true;
-
-		};
-
-	}
-
+               scope.visible = true;
+          };
+     }
 }
 
 Water.WaterShader = {
+     name: "WaterShader",
 
-	name: 'WaterShader',
+     uniforms: {
+          color: {
+               type: "c",
+               value: null,
+          },
 
-	uniforms: {
+          reflectivity: {
+               type: "f",
+               value: 0,
+          },
 
-		'color': {
-			type: 'c',
-			value: null
-		},
+          tReflectionMap: {
+               type: "t",
+               value: null,
+          },
 
-		'reflectivity': {
-			type: 'f',
-			value: 0
-		},
+          tRefractionMap: {
+               type: "t",
+               value: null,
+          },
 
-		'tReflectionMap': {
-			type: 't',
-			value: null
-		},
+          tNormalMap0: {
+               type: "t",
+               value: null,
+          },
 
-		'tRefractionMap': {
-			type: 't',
-			value: null
-		},
+          tNormalMap1: {
+               type: "t",
+               value: null,
+          },
 
-		'tNormalMap0': {
-			type: 't',
-			value: null
-		},
+          textureMatrix: {
+               type: "m4",
+               value: null,
+          },
 
-		'tNormalMap1': {
-			type: 't',
-			value: null
-		},
+          config: {
+               type: "v4",
+               value: new Vector4(),
+          },
+     },
 
-		'textureMatrix': {
-			type: 'm4',
-			value: null
-		},
-
-		'config': {
-			type: 'v4',
-			value: new Vector4()
-		}
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		#include <common>
 		#include <fog_pars_vertex>
@@ -302,7 +269,7 @@ Water.WaterShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		#include <common>
 		#include <fog_pars_fragment>
@@ -376,26 +343,28 @@ Water.WaterShader = {
 			#include <colorspace_fragment>
 			#include <fog_fragment>
 
-		}`
-
+		}`,
 };
 
 /**
  * Constructor options of `Water`.
  *
  * @typedef {Object} module:Water2~Options
- * @property {number|Color|string} [color=0xFFFFFF] - The water color.
- * @property {number} [textureWidth=512] - The texture width. A higher value results in better quality but is also more expensive.
- * @property {number} [textureHeight=512] - The texture height. A higher value results in better quality but is also more expensive.
- * @property {number} [clipBias=0] - The clip bias.
- * @property {Vector2} [flowDirection=(1,0)] - The water's flow direction.
- * @property {number} [flowSpeed=0.03] - The water's flow speed.
- * @property {number} [reflectivity=0.02] - The water's reflectivity.
- * @property {number} [scale=1] - The water's scale.
+ * @property {number | Color | string} [color=0xFFFFFF] - The water color. Default is `0xFFFFFF`
+ * @property {number} [textureWidth=512] - The texture width. A higher value results in better quality but is also more
+ *   expensive. Default is `512`
+ * @property {number} [textureHeight=512] - The texture height. A higher value results in better quality but is also
+ *   more expensive. Default is `512`
+ * @property {number} [clipBias=0] - The clip bias. Default is `0`
+ * @property {Vector2} [flowDirection=(1,0)] - The water's flow direction. Default is `(1,0)`
+ * @property {number} [flowSpeed=0.03] - The water's flow speed. Default is `0.03`
+ * @property {number} [reflectivity=0.02] - The water's reflectivity. Default is `0.02`
+ * @property {number} [scale=1] - The water's scale. Default is `1`
  * @property {Object} [shader] - A custom water shader.
- * @property {?Texture} [flowMap=null] - The flow map. If no flow map is assigned, the water flow is defined by `flowDirection`.
- * @property {?Texture} [normalMap0] - The first water normal map.
- * @property {?Texture} [normalMap1] -  The second water normal map.
- **/
+ * @property {Texture | null} [flowMap=null] - The flow map. If no flow map is assigned, the water flow is defined by
+ *   `flowDirection`. Default is `null`
+ * @property {Texture | null} [normalMap0] - The first water normal map.
+ * @property {Texture | null} [normalMap1] - The second water normal map.
+ */
 
 export { Water };

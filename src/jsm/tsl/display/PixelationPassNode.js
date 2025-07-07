@@ -1,5 +1,25 @@
-import { NearestFilter, Vector4, TempNode, NodeUpdateType, PassNode } from 'three/webgpu';
-import { nodeObject, Fn, float, uv, uniform, convertToTexture, vec2, vec3, clamp, floor, dot, smoothstep, If, sign, step, mrt, output, normalView, property } from 'three/tsl';
+import { NearestFilter, Vector4, TempNode, NodeUpdateType, PassNode } from "three/webgpu";
+import {
+     nodeObject,
+     Fn,
+     float,
+     uv,
+     uniform,
+     convertToTexture,
+     vec2,
+     vec3,
+     clamp,
+     floor,
+     dot,
+     smoothstep,
+     If,
+     sign,
+     step,
+     mrt,
+     output,
+     normalView,
+     property,
+} from "three/tsl";
 
 /**
  * A inner node definition that implements the actual pixelation TSL code.
@@ -8,212 +28,201 @@ import { nodeObject, Fn, float, uv, uniform, convertToTexture, vec2, vec3, clamp
  * @augments TempNode
  */
 class PixelationNode extends TempNode {
+     static get type() {
+          return "PixelationNode";
+     }
 
-	static get type() {
+     /**
+      * Constructs a new pixelation node.
+      *
+      * @param {TextureNode} textureNode - The texture node that represents the beauty pass.
+      * @param {TextureNode} depthNode - The texture that represents the beauty's depth.
+      * @param {TextureNode} normalNode - The texture that represents the beauty's normals.
+      * @param {Node<float>} pixelSize - The pixel size.
+      * @param {Node<float>} normalEdgeStrength - The normal edge strength.
+      * @param {Node<float>} depthEdgeStrength - The depth edge strength.
+      */
+     constructor(textureNode, depthNode, normalNode, pixelSize, normalEdgeStrength, depthEdgeStrength) {
+          super("vec4");
 
-		return 'PixelationNode';
+          /**
+           * The texture node that represents the beauty pass.
+           *
+           * @type {TextureNode}
+           */
+          this.textureNode = textureNode;
 
-	}
+          /**
+           * The texture that represents the beauty's depth.
+           *
+           * @type {TextureNode}
+           */
+          this.depthNode = depthNode;
 
-	/**
-	 * Constructs a new pixelation node.
-	 *
-	 * @param {TextureNode} textureNode - The texture node that represents the beauty pass.
-	 * @param {TextureNode} depthNode - The texture that represents the beauty's depth.
-	 * @param {TextureNode} normalNode - The texture that represents the beauty's normals.
-	 * @param {Node<float>} pixelSize - The pixel size.
-	 * @param {Node<float>} normalEdgeStrength - The normal edge strength.
-	 * @param {Node<float>} depthEdgeStrength - The depth edge strength.
-	 */
-	constructor( textureNode, depthNode, normalNode, pixelSize, normalEdgeStrength, depthEdgeStrength ) {
+          /**
+           * The texture that represents the beauty's normals.
+           *
+           * @type {TextureNode}
+           */
+          this.normalNode = normalNode;
 
-		super( 'vec4' );
+          /**
+           * The pixel size.
+           *
+           * @type {Node<float>}
+           */
+          this.pixelSize = pixelSize;
 
-		/**
-		 * The texture node that represents the beauty pass.
-		 *
-		 * @type {TextureNode}
-		 */
-		this.textureNode = textureNode;
+          /**
+           * The pixel size.
+           *
+           * @type {Node<float>}
+           */
+          this.normalEdgeStrength = normalEdgeStrength;
 
-		/**
-		 * The texture that represents the beauty's depth.
-		 *
-		 * @type {TextureNode}
-		 */
-		this.depthNode = depthNode;
+          /**
+           * The depth edge strength.
+           *
+           * @type {Node<float>}
+           */
+          this.depthEdgeStrength = depthEdgeStrength;
 
-		/**
-		 * The texture that represents the beauty's normals.
-		 *
-		 * @type {TextureNode}
-		 */
-		this.normalNode = normalNode;
+          /**
+           * Uniform node that represents the resolution.
+           *
+           * @type {Node<vec4>}
+           */
+          this._resolution = uniform(new Vector4());
 
-		/**
-		 * The pixel size.
-		 *
-		 * @type {Node<float>}
-		 */
-		this.pixelSize = pixelSize;
+          /**
+           * The `updateBeforeType` is set to `NodeUpdateType.FRAME` since the node updates
+           * its internal uniforms once per frame in `updateBefore()`.
+           *
+           * @type {string}
+           * @default 'frame'
+           */
+          this.updateBeforeType = NodeUpdateType.FRAME;
+     }
 
-		/**
-		 * The pixel size.
-		 *
-		 * @type {Node<float>}
-		 */
-		this.normalEdgeStrength = normalEdgeStrength;
+     /**
+      * This method is used to update uniforms once per frame.
+      *
+      * @param {NodeFrame} frame - The current node frame.
+      */
+     updateBefore() {
+          const map = this.textureNode.value;
 
-		/**
-		 * The depth edge strength.
-		 *
-		 * @type {Node<float>}
-		 */
-		this.depthEdgeStrength = depthEdgeStrength;
+          const width = map.image.width;
+          const height = map.image.height;
 
-		/**
-		 * Uniform node that represents the resolution.
-		 *
-		 * @type {Node<vec4>}
-		 */
-		this._resolution = uniform( new Vector4() );
+          this._resolution.value.set(width, height, 1 / width, 1 / height);
+     }
 
-		/**
-		 * The `updateBeforeType` is set to `NodeUpdateType.FRAME` since the node updates
-		 * its internal uniforms once per frame in `updateBefore()`.
-		 *
-		 * @type {string}
-		 * @default 'frame'
-		 */
-		this.updateBeforeType = NodeUpdateType.FRAME;
+     /**
+      * This method is used to setup the effect's TSL code.
+      *
+      * @param {NodeBuilder} builder - The current node builder.
+      * @return {ShaderCallNodeInternal}
+      */
+     setup() {
+          const { textureNode, depthNode, normalNode } = this;
 
-	}
+          const uvNodeTexture = textureNode.uvNode || uv();
+          const uvNodeDepth = depthNode.uvNode || uv();
+          const uvNodeNormal = normalNode.uvNode || uv();
 
-	/**
-	 * This method is used to update uniforms once per frame.
-	 *
-	 * @param {NodeFrame} frame - The current node frame.
-	 */
-	updateBefore() {
+          const sampleTexture = () => textureNode.sample(uvNodeTexture);
 
-		const map = this.textureNode.value;
+          const sampleDepth = (x, y) => depthNode.sample(uvNodeDepth.add(vec2(x, y).mul(this._resolution.zw))).r;
 
-		const width = map.image.width;
-		const height = map.image.height;
+          const sampleNormal = (x, y) =>
+               normalNode.sample(uvNodeNormal.add(vec2(x, y).mul(this._resolution.zw))).rgb.normalize();
 
-		this._resolution.value.set( width, height, 1 / width, 1 / height );
+          const depthEdgeIndicator = (depth) => {
+               const diff = property("float", "diff");
+               diff.addAssign(clamp(sampleDepth(1, 0).sub(depth)));
+               diff.addAssign(clamp(sampleDepth(-1, 0).sub(depth)));
+               diff.addAssign(clamp(sampleDepth(0, 1).sub(depth)));
+               diff.addAssign(clamp(sampleDepth(0, -1).sub(depth)));
 
-	}
+               return floor(smoothstep(0.01, 0.02, diff).mul(2)).div(2);
+          };
 
-	/**
-	 * This method is used to setup the effect's TSL code.
-	 *
-	 * @param {NodeBuilder} builder - The current node builder.
-	 * @return {ShaderCallNodeInternal}
-	 */
-	setup() {
+          const neighborNormalEdgeIndicator = (x, y, depth, normal) => {
+               const depthDiff = sampleDepth(x, y).sub(depth);
+               const neighborNormal = sampleNormal(x, y);
 
-		const { textureNode, depthNode, normalNode } = this;
+               // Edge pixels should yield to faces who's normals are closer to the bias normal.
 
-		const uvNodeTexture = textureNode.uvNode || uv();
-		const uvNodeDepth = depthNode.uvNode || uv();
-		const uvNodeNormal = normalNode.uvNode || uv();
+               const normalEdgeBias = vec3(1, 1, 1); // This should probably be a parameter.
+               const normalDiff = dot(normal.sub(neighborNormal), normalEdgeBias);
+               const normalIndicator = clamp(smoothstep(-0.01, 0.01, normalDiff), 0.0, 1.0);
 
-		const sampleTexture = () => textureNode.sample( uvNodeTexture );
+               // Only the shallower pixel should detect the normal edge.
 
-		const sampleDepth = ( x, y ) => depthNode.sample( uvNodeDepth.add( vec2( x, y ).mul( this._resolution.zw ) ) ).r;
+               const depthIndicator = clamp(sign(depthDiff.mul(0.25).add(0.0025)), 0.0, 1.0);
 
-		const sampleNormal = ( x, y ) => normalNode.sample( uvNodeNormal.add( vec2( x, y ).mul( this._resolution.zw ) ) ).rgb.normalize();
+               return float(1.0).sub(dot(normal, neighborNormal)).mul(depthIndicator).mul(normalIndicator);
+          };
 
-		const depthEdgeIndicator = ( depth ) => {
+          const normalEdgeIndicator = (depth, normal) => {
+               const indicator = property("float", "indicator");
 
-			const diff = property( 'float', 'diff' );
-			diff.addAssign( clamp( sampleDepth( 1, 0 ).sub( depth ) ) );
-			diff.addAssign( clamp( sampleDepth( - 1, 0 ).sub( depth ) ) );
-			diff.addAssign( clamp( sampleDepth( 0, 1 ).sub( depth ) ) );
-			diff.addAssign( clamp( sampleDepth( 0, - 1 ).sub( depth ) ) );
+               indicator.addAssign(neighborNormalEdgeIndicator(0, -1, depth, normal));
+               indicator.addAssign(neighborNormalEdgeIndicator(0, 1, depth, normal));
+               indicator.addAssign(neighborNormalEdgeIndicator(-1, 0, depth, normal));
+               indicator.addAssign(neighborNormalEdgeIndicator(1, 0, depth, normal));
 
-			return floor( smoothstep( 0.01, 0.02, diff ).mul( 2 ) ).div( 2 );
+               return step(0.1, indicator);
+          };
 
-		};
+          const pixelation = Fn(() => {
+               const texel = sampleTexture();
 
-		const neighborNormalEdgeIndicator = ( x, y, depth, normal ) => {
+               const depth = property("float", "depth");
+               const normal = property("vec3", "normal");
 
-			const depthDiff = sampleDepth( x, y ).sub( depth );
-			const neighborNormal = sampleNormal( x, y );
+               If(this.depthEdgeStrength.greaterThan(0.0).or(this.normalEdgeStrength.greaterThan(0.0)), () => {
+                    depth.assign(sampleDepth(0, 0));
+                    normal.assign(sampleNormal(0, 0));
+               });
 
-			// Edge pixels should yield to faces who's normals are closer to the bias normal.
+               const dei = property("float", "dei");
 
-			const normalEdgeBias = vec3( 1, 1, 1 ); // This should probably be a parameter.
-			const normalDiff = dot( normal.sub( neighborNormal ), normalEdgeBias );
-			const normalIndicator = clamp( smoothstep( - 0.01, 0.01, normalDiff ), 0.0, 1.0 );
+               If(this.depthEdgeStrength.greaterThan(0.0), () => {
+                    dei.assign(depthEdgeIndicator(depth));
+               });
 
-			// Only the shallower pixel should detect the normal edge.
+               const nei = property("float", "nei");
 
-			const depthIndicator = clamp( sign( depthDiff.mul( .25 ).add( .0025 ) ), 0.0, 1.0 );
+               If(this.normalEdgeStrength.greaterThan(0.0), () => {
+                    nei.assign(normalEdgeIndicator(depth, normal));
+               });
 
-			return float( 1.0 ).sub( dot( normal, neighborNormal ) ).mul( depthIndicator ).mul( normalIndicator );
+               const strength = dei
+                    .greaterThan(0)
+                    .select(float(1.0).sub(dei.mul(this.depthEdgeStrength)), nei.mul(this.normalEdgeStrength).add(1));
 
-		};
+               return texel.mul(strength);
+          });
 
-		const normalEdgeIndicator = ( depth, normal ) => {
+          const outputNode = pixelation();
 
-			const indicator = property( 'float', 'indicator' );
-
-			indicator.addAssign( neighborNormalEdgeIndicator( 0, - 1, depth, normal ) );
-			indicator.addAssign( neighborNormalEdgeIndicator( 0, 1, depth, normal ) );
-			indicator.addAssign( neighborNormalEdgeIndicator( - 1, 0, depth, normal ) );
-			indicator.addAssign( neighborNormalEdgeIndicator( 1, 0, depth, normal ) );
-
-			return step( 0.1, indicator );
-
-		};
-
-		const pixelation = Fn( () => {
-
-			const texel = sampleTexture();
-
-			const depth = property( 'float', 'depth' );
-			const normal = property( 'vec3', 'normal' );
-
-			If( this.depthEdgeStrength.greaterThan( 0.0 ).or( this.normalEdgeStrength.greaterThan( 0.0 ) ), () => {
-
-				depth.assign( sampleDepth( 0, 0 ) );
-				normal.assign( sampleNormal( 0, 0 ) );
-
-			} );
-
-			const dei = property( 'float', 'dei' );
-
-			If( this.depthEdgeStrength.greaterThan( 0.0 ), () => {
-
-				dei.assign( depthEdgeIndicator( depth ) );
-
-			} );
-
-			const nei = property( 'float', 'nei' );
-
-			If( this.normalEdgeStrength.greaterThan( 0.0 ), () => {
-
-				nei.assign( normalEdgeIndicator( depth, normal ) );
-
-			} );
-
-			const strength = dei.greaterThan( 0 ).select( float( 1.0 ).sub( dei.mul( this.depthEdgeStrength ) ), nei.mul( this.normalEdgeStrength ).add( 1 ) );
-
-			return texel.mul( strength );
-
-		} );
-
-		const outputNode = pixelation();
-
-		return outputNode;
-
-	}
-
+          return outputNode;
+     }
 }
 
-const pixelation = ( node, depthNode, normalNode, pixelSize = 6, normalEdgeStrength = 0.3, depthEdgeStrength = 0.4 ) => nodeObject( new PixelationNode( convertToTexture( node ), convertToTexture( depthNode ), convertToTexture( normalNode ), nodeObject( pixelSize ), nodeObject( normalEdgeStrength ), nodeObject( depthEdgeStrength ) ) );
+const pixelation = (node, depthNode, normalNode, pixelSize = 6, normalEdgeStrength = 0.3, depthEdgeStrength = 0.4) =>
+     nodeObject(
+          new PixelationNode(
+               convertToTexture(node),
+               convertToTexture(depthNode),
+               convertToTexture(normalNode),
+               nodeObject(pixelSize),
+               nodeObject(normalEdgeStrength),
+               nodeObject(depthEdgeStrength)
+          )
+     );
 
 /**
  * A special render pass node that renders the scene with a pixelation effect.
@@ -222,99 +231,92 @@ const pixelation = ( node, depthNode, normalNode, pixelSize = 6, normalEdgeStren
  * @three_import import { pixelationPass } from 'three/addons/tsl/display/PixelationPassNode.js';
  */
 class PixelationPassNode extends PassNode {
+     static get type() {
+          return "PixelationPassNode";
+     }
 
-	static get type() {
+     /**
+      * Constructs a new pixelation pass node.
+      *
+      * @param {Scene} scene - The scene to render.
+      * @param {Camera} camera - The camera to render the scene with.
+      * @param {Node<float> | number} [pixelSize=6] - The pixel size.
+      * @param {Node<float> | number} [normalEdgeStrength=0.3] - The normal edge strength.
+      * @param {Node<float> | number} [depthEdgeStrength=0.4] - The depth edge strength.
+      */
+     constructor(scene, camera, pixelSize = 6, normalEdgeStrength = 0.3, depthEdgeStrength = 0.4) {
+          super(PassNode.COLOR, scene, camera, {
+               minFilter: NearestFilter,
+               magFilter: NearestFilter,
+          });
 
-		return 'PixelationPassNode';
+          /**
+           * The pixel size.
+           *
+           * @type {number}
+           * @default 6
+           */
+          this.pixelSize = pixelSize;
 
-	}
+          /**
+           * The normal edge strength.
+           *
+           * @type {number}
+           * @default 0.3
+           */
+          this.normalEdgeStrength = normalEdgeStrength;
 
-	/**
-	 * Constructs a new pixelation pass node.
-	 *
-	 * @param {Scene} scene - The scene to render.
-	 * @param {Camera} camera - The camera to render the scene with.
-	 * @param {Node<float> | number} [pixelSize=6] - The pixel size.
-	 * @param {Node<float> | number} [normalEdgeStrength=0.3] - The normal edge strength.
-	 * @param {Node<float> | number} [depthEdgeStrength=0.4] - The depth edge strength.
-	 */
-	constructor( scene, camera, pixelSize = 6, normalEdgeStrength = 0.3, depthEdgeStrength = 0.4 ) {
+          /**
+           * The depth edge strength.
+           *
+           * @type {number}
+           * @default 0.4
+           */
+          this.depthEdgeStrength = depthEdgeStrength;
 
-		super( PassNode.COLOR, scene, camera, { minFilter: NearestFilter, magFilter: NearestFilter } );
+          /**
+           * This flag can be used for type testing.
+           *
+           * @type {boolean}
+           * @readonly
+           * @default true
+           */
+          this.isPixelationPassNode = true;
 
-		/**
-		 * The pixel size.
-		 *
-		 * @type {number}
-		 * @default 6
-		 */
-		this.pixelSize = pixelSize;
+          this._mrt = mrt({
+               output: output,
+               normal: normalView,
+          });
+     }
 
-		/**
-		 * The normal edge strength.
-		 *
-		 * @type {number}
-		 * @default 0.3
-		 */
-		this.normalEdgeStrength = normalEdgeStrength;
+     /**
+      * Sets the size of the pass.
+      *
+      * @param {number} width - The width of the pass.
+      * @param {number} height - The height of the pass.
+      */
+     setSize(width, height) {
+          const pixelSize = this.pixelSize.value ? this.pixelSize.value : this.pixelSize;
 
-		/**
-		 * The depth edge strength.
-		 *
-		 * @type {number}
-		 * @default 0.4
-		 */
-		this.depthEdgeStrength = depthEdgeStrength;
+          const adjustedWidth = Math.floor(width / pixelSize);
+          const adjustedHeight = Math.floor(height / pixelSize);
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isPixelationPassNode = true;
+          super.setSize(adjustedWidth, adjustedHeight);
+     }
 
-		this._mrt = mrt( {
-			output: output,
-			normal: normalView
-		} );
+     /**
+      * This method is used to setup the effect's TSL code.
+      *
+      * @param {NodeBuilder} builder - The current node builder.
+      * @return {PixelationNode}
+      */
+     setup() {
+          const color = super.getTextureNode("output");
+          const depth = super.getTextureNode("depth");
+          const normal = super.getTextureNode("normal");
 
-	}
-
-	/**
-	 * Sets the size of the pass.
-	 *
-	 * @param {number} width - The width of the pass.
-	 * @param {number} height - The height of the pass.
-	 */
-	setSize( width, height ) {
-
-		const pixelSize = this.pixelSize.value ? this.pixelSize.value : this.pixelSize;
-
-		const adjustedWidth = Math.floor( width / pixelSize );
-		const adjustedHeight = Math.floor( height / pixelSize );
-
-		super.setSize( adjustedWidth, adjustedHeight );
-
-	}
-
-	/**
-	 * This method is used to setup the effect's TSL code.
-	 *
-	 * @param {NodeBuilder} builder - The current node builder.
-	 * @return {PixelationNode}
-	 */
-	setup() {
-
-		const color = super.getTextureNode( 'output' );
-		const depth = super.getTextureNode( 'depth' );
-		const normal = super.getTextureNode( 'normal' );
-
-		return pixelation( color, depth, normal, this.pixelSize, this.normalEdgeStrength, this.depthEdgeStrength );
-
-	}
-
+          return pixelation(color, depth, normal, this.pixelSize, this.normalEdgeStrength, this.depthEdgeStrength);
+     }
 }
 
 /**
@@ -329,6 +331,7 @@ class PixelationPassNode extends PassNode {
  * @param {Node<float> | number} [depthEdgeStrength=0.4] - The depth edge strength.
  * @returns {PixelationPassNode}
  */
-export const pixelationPass = ( scene, camera, pixelSize, normalEdgeStrength, depthEdgeStrength ) => nodeObject( new PixelationPassNode( scene, camera, pixelSize, normalEdgeStrength, depthEdgeStrength ) );
+export const pixelationPass = (scene, camera, pixelSize, normalEdgeStrength, depthEdgeStrength) =>
+     nodeObject(new PixelationPassNode(scene, camera, pixelSize, normalEdgeStrength, depthEdgeStrength));
 
 export default PixelationPassNode;

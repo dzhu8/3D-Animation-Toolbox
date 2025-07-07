@@ -1,7 +1,4 @@
-import {
-	Matrix4,
-	Vector2
-} from 'three';
+import { Matrix4, Vector2 } from "three";
 
 /**
  * @module SSAOShader
@@ -12,6 +9,7 @@ import {
  * SSAO shader.
  *
  * References:
+ *
  * - {@link http://john-chapman-graphics.blogspot.com/2013/01/ssao-tutorial.html}
  * - {@link https://learnopengl.com/Advanced-Lighting/SSAO}
  * - {@link https://github.com/McNopper/OpenGL/blob/master/Example28/shader/ssao.frag.glsl}
@@ -20,32 +18,29 @@ import {
  * @type {ShaderMaterial~Shader}
  */
 const SSAOShader = {
+     name: "SSAOShader",
 
-	name: 'SSAOShader',
+     defines: {
+          PERSPECTIVE_CAMERA: 1,
+          KERNEL_SIZE: 32,
+     },
 
-	defines: {
-		'PERSPECTIVE_CAMERA': 1,
-		'KERNEL_SIZE': 32
-	},
+     uniforms: {
+          tNormal: { value: null },
+          tDepth: { value: null },
+          tNoise: { value: null },
+          kernel: { value: null },
+          cameraNear: { value: null },
+          cameraFar: { value: null },
+          resolution: { value: new Vector2() },
+          cameraProjectionMatrix: { value: new Matrix4() },
+          cameraInverseProjectionMatrix: { value: new Matrix4() },
+          kernelRadius: { value: 8 },
+          minDistance: { value: 0.005 },
+          maxDistance: { value: 0.05 },
+     },
 
-	uniforms: {
-
-		'tNormal': { value: null },
-		'tDepth': { value: null },
-		'tNoise': { value: null },
-		'kernel': { value: null },
-		'cameraNear': { value: null },
-		'cameraFar': { value: null },
-		'resolution': { value: new Vector2() },
-		'cameraProjectionMatrix': { value: new Matrix4() },
-		'cameraInverseProjectionMatrix': { value: new Matrix4() },
-		'kernelRadius': { value: 8 },
-		'minDistance': { value: 0.005 },
-		'maxDistance': { value: 0.05 },
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -57,7 +52,7 @@ const SSAOShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 		uniform highp sampler2D tNormal;
 		uniform highp sampler2D tDepth;
 		uniform sampler2D tNoise;
@@ -187,8 +182,7 @@ const SSAOShader = {
 
 			}
 
-		}`
-
+		}`,
 };
 
 /**
@@ -198,24 +192,19 @@ const SSAOShader = {
  * @type {ShaderMaterial~Shader}
  */
 const SSAODepthShader = {
+     name: "SSAODepthShader",
 
-	name: 'SSAODepthShader',
+     defines: {
+          PERSPECTIVE_CAMERA: 1,
+     },
 
-	defines: {
-		'PERSPECTIVE_CAMERA': 1
-	},
+     uniforms: {
+          tDepth: { value: null },
+          cameraNear: { value: null },
+          cameraFar: { value: null },
+     },
 
-	uniforms: {
-
-		'tDepth': { value: null },
-		'cameraNear': { value: null },
-		'cameraFar': { value: null },
-
-	},
-
-	vertexShader:
-
-		`varying vec2 vUv;
+     vertexShader: `varying vec2 vUv;
 
 		void main() {
 
@@ -224,9 +213,7 @@ const SSAODepthShader = {
 
 		}`,
 
-	fragmentShader:
-
-		`uniform sampler2D tDepth;
+     fragmentShader: `uniform sampler2D tDepth;
 
 		uniform float cameraNear;
 		uniform float cameraFar;
@@ -256,8 +243,7 @@ const SSAODepthShader = {
 			float depth = getLinearDepth( vUv );
 			gl_FragColor = vec4( vec3( 1.0 - depth ), 1.0 );
 
-		}`
-
+		}`,
 };
 
 /**
@@ -267,19 +253,14 @@ const SSAODepthShader = {
  * @type {Object}
  */
 const SSAOBlurShader = {
+     name: "SSAOBlurShader",
 
-	name: 'SSAOBlurShader',
+     uniforms: {
+          tDiffuse: { value: null },
+          resolution: { value: new Vector2() },
+     },
 
-	uniforms: {
-
-		'tDiffuse': { value: null },
-		'resolution': { value: new Vector2() }
-
-	},
-
-	vertexShader:
-
-		`varying vec2 vUv;
+     vertexShader: `varying vec2 vUv;
 
 		void main() {
 
@@ -288,9 +269,7 @@ const SSAOBlurShader = {
 
 		}`,
 
-	fragmentShader:
-
-		`uniform sampler2D tDiffuse;
+     fragmentShader: `uniform sampler2D tDiffuse;
 
 		uniform vec2 resolution;
 
@@ -314,8 +293,7 @@ const SSAOBlurShader = {
 
 			gl_FragColor = vec4( vec3( result / ( 5.0 * 5.0 ) ), 1.0 );
 
-		}`
-
+		}`,
 };
 
 export { SSAOShader, SSAODepthShader, SSAOBlurShader };

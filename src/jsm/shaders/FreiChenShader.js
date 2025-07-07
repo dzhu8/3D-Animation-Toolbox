@@ -1,6 +1,4 @@
-import {
-	Vector2
-} from 'three';
+import { Vector2 } from "three";
 
 /**
  * @module FreiChenShader
@@ -8,25 +6,23 @@ import {
  */
 
 /**
- * Edge Detection Shader using Frei-Chen filter.
- * Based on {@link http://rastergrid.com/blog/2011/01/frei-chen-edge-detector}.
+ * Edge Detection Shader using Frei-Chen filter. Based on
+ * {@link http://rastergrid.com/blog/2011/01/frei-chen-edge-detector}.
  *
- * aspect: vec2 of (1/width, 1/height)
+ * Aspect: vec2 of (1/width, 1/height)
  *
  * @constant
  * @type {ShaderMaterial~Shader}
  */
 const FreiChenShader = {
+     name: "FreiChenShader",
 
-	name: 'FreiChenShader',
+     uniforms: {
+          tDiffuse: { value: null },
+          aspect: { value: new Vector2(512, 512) },
+     },
 
-	uniforms: {
-
-		'tDiffuse': { value: null },
-		'aspect': { value: new Vector2( 512, 512 ) }
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -37,7 +33,7 @@ const FreiChenShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform sampler2D tDiffuse;
 		varying vec2 vUv;
@@ -96,8 +92,7 @@ const FreiChenShader = {
 			float S = (cnv[4] + cnv[5]) + (cnv[6] + cnv[7]) + (cnv[8] + M);
 
 			gl_FragColor = vec4(vec3(sqrt(M/S)), 1.0);
-		}`
-
+		}`,
 };
 
 export { FreiChenShader };

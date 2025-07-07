@@ -4,24 +4,21 @@
  */
 
 /**
- * Simulates the look of the two-strip technicolor process popular in early 20th century films.
- * More historical info here: {@link http://www.widescreenmuseum.com/oldcolor/technicolor1.htm}
- * Demo here: {@link http://charliehoey.com/technicolor_shader/shader_test.html}
+ * Simulates the look of the two-strip technicolor process popular in early 20th century films. More historical info
+ * here: {@link http://www.widescreenmuseum.com/oldcolor/technicolor1.htm} Demo here:
+ * {@link http://charliehoey.com/technicolor_shader/shader_test.html}
  *
  * @constant
  * @type {ShaderMaterial~Shader}
  */
 const TechnicolorShader = {
+     name: "TechnicolorShader",
 
-	name: 'TechnicolorShader',
+     uniforms: {
+          tDiffuse: { value: null },
+     },
 
-	uniforms: {
-
-		'tDiffuse': { value: null }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -32,7 +29,7 @@ const TechnicolorShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform sampler2D tDiffuse;
 		varying vec2 vUv;
@@ -44,8 +41,7 @@ const TechnicolorShader = {
 
 			gl_FragColor = newTex;
 
-		}`
-
+		}`,
 };
 
 export { TechnicolorShader };

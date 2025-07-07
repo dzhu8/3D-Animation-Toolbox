@@ -6,25 +6,22 @@
 /**
  * Hue and saturation adjustment, {@link https://github.com/evanw/glfx.js}.
  *
- * hue: -1 to 1 (-1 is 180 degrees in the negative direction, 0 is no change, etc.
- * saturation: -1 to 1 (-1 is solid gray, 0 is no change, and 1 is maximum contrast)
+ * Hue: -1 to 1 (-1 is 180 degrees in the negative direction, 0 is no change, etc. saturation: -1 to 1 (-1 is solid
+ * gray, 0 is no change, and 1 is maximum contrast)
  *
  * @constant
  * @type {ShaderMaterial~Shader}
  */
 const HueSaturationShader = {
+     name: "HueSaturationShader",
 
-	name: 'HueSaturationShader',
+     uniforms: {
+          tDiffuse: { value: null },
+          hue: { value: 0 },
+          saturation: { value: 0 },
+     },
 
-	uniforms: {
-
-		'tDiffuse': { value: null },
-		'hue': { value: 0 },
-		'saturation': { value: 0 }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -36,7 +33,7 @@ const HueSaturationShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform sampler2D tDiffuse;
 		uniform float hue;
@@ -67,8 +64,7 @@ const HueSaturationShader = {
 				gl_FragColor.rgb += (average - gl_FragColor.rgb) * (-saturation);
 			}
 
-		}`
-
+		}`,
 };
 
 export { HueSaturationShader };

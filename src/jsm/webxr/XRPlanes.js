@@ -1,10 +1,4 @@
-import {
-	BoxGeometry,
-	Matrix4,
-	Mesh,
-	MeshBasicMaterial,
-	Object3D
-} from 'three';
+import { BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Object3D } from "three";
 
 /**
  * A utility class for the WebXR Plane Detection Module. If planes
@@ -20,99 +14,83 @@ import {
  * @three_import import { XRPlanes } from 'three/addons/webxr/XRPlanes.js';
  */
 class XRPlanes extends Object3D {
+     /**
+      * Constructs a new XR plane container.
+      *
+      * @param {WebGLRenderer|WebGPURenderer} renderer - The renderer.
+      */
+     constructor(renderer) {
+          super();
 
-	/**
-	 * Constructs a new XR plane container.
-	 *
-	 * @param {WebGLRenderer|WebGPURenderer} renderer - The renderer.
-	 */
-	constructor( renderer ) {
+          const matrix = new Matrix4();
 
-		super();
+          const currentPlanes = new Map();
 
-		const matrix = new Matrix4();
+          const xr = renderer.xr;
 
-		const currentPlanes = new Map();
+          xr.addEventListener("planesdetected", (event) => {
+               const frame = event.data;
+               const planes = frame.detectedPlanes;
 
-		const xr = renderer.xr;
+               const referenceSpace = xr.getReferenceSpace();
 
-		xr.addEventListener( 'planesdetected', event => {
+               let planeschanged = false;
 
-			const frame = event.data;
-			const planes = frame.detectedPlanes;
+               for (const [plane, mesh] of currentPlanes) {
+                    if (planes.has(plane) === false) {
+                         mesh.geometry.dispose();
+                         mesh.material.dispose();
+                         this.remove(mesh);
 
-			const referenceSpace = xr.getReferenceSpace();
+                         currentPlanes.delete(plane);
 
-			let planeschanged = false;
+                         planeschanged = true;
+                    }
+               }
 
-			for ( const [ plane, mesh ] of currentPlanes ) {
+               for (const plane of planes) {
+                    if (currentPlanes.has(plane) === false) {
+                         const pose = frame.getPose(plane.planeSpace, referenceSpace);
+                         matrix.fromArray(pose.transform.matrix);
 
-				if ( planes.has( plane ) === false ) {
+                         const polygon = plane.polygon;
 
-					mesh.geometry.dispose();
-					mesh.material.dispose();
-					this.remove( mesh );
+                         let minX = Number.MAX_SAFE_INTEGER;
+                         let maxX = Number.MIN_SAFE_INTEGER;
+                         let minZ = Number.MAX_SAFE_INTEGER;
+                         let maxZ = Number.MIN_SAFE_INTEGER;
 
-					currentPlanes.delete( plane );
+                         for (const point of polygon) {
+                              minX = Math.min(minX, point.x);
+                              maxX = Math.max(maxX, point.x);
+                              minZ = Math.min(minZ, point.z);
+                              maxZ = Math.max(maxZ, point.z);
+                         }
 
-					planeschanged = true;
+                         const width = maxX - minX;
+                         const height = maxZ - minZ;
 
-				}
+                         const geometry = new BoxGeometry(width, 0.01, height);
+                         const material = new MeshBasicMaterial({
+                              color: 0xffffff * Math.random(),
+                         });
 
-			}
+                         const mesh = new Mesh(geometry, material);
+                         mesh.position.setFromMatrixPosition(matrix);
+                         mesh.quaternion.setFromRotationMatrix(matrix);
+                         this.add(mesh);
 
-			for ( const plane of planes ) {
+                         currentPlanes.set(plane, mesh);
 
-				if ( currentPlanes.has( plane ) === false ) {
+                         planeschanged = true;
+                    }
+               }
 
-					const pose = frame.getPose( plane.planeSpace, referenceSpace );
-					matrix.fromArray( pose.transform.matrix );
-
-					const polygon = plane.polygon;
-
-					let minX = Number.MAX_SAFE_INTEGER;
-					let maxX = Number.MIN_SAFE_INTEGER;
-					let minZ = Number.MAX_SAFE_INTEGER;
-					let maxZ = Number.MIN_SAFE_INTEGER;
-
-					for ( const point of polygon ) {
-
-						minX = Math.min( minX, point.x );
-						maxX = Math.max( maxX, point.x );
-						minZ = Math.min( minZ, point.z );
-						maxZ = Math.max( maxZ, point.z );
-
-					}
-
-					const width = maxX - minX;
-					const height = maxZ - minZ;
-
-					const geometry = new BoxGeometry( width, 0.01, height );
-					const material = new MeshBasicMaterial( { color: 0xffffff * Math.random() } );
-
-					const mesh = new Mesh( geometry, material );
-					mesh.position.setFromMatrixPosition( matrix );
-					mesh.quaternion.setFromRotationMatrix( matrix );
-					this.add( mesh );
-
-					currentPlanes.set( plane, mesh );
-
-					planeschanged = true;
-
-				}
-
-			}
-
-			if ( planeschanged ) {
-
-				this.dispatchEvent( { type: 'planeschanged' } );
-
-			}
-
-		} );
-
-	}
-
+               if (planeschanged) {
+                    this.dispatchEvent({ type: "planeschanged" });
+               }
+          });
+     }
 }
 
 export { XRPlanes };

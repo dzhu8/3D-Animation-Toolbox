@@ -1,15 +1,15 @@
 import {
-	DoubleSide,
-	CanvasTexture,
-	Mesh,
-	MeshBasicMaterial,
-	NodeMaterial,
-	OrthographicCamera,
-	PlaneGeometry,
-	Scene,
-	Texture
-} from 'three';
-import { texture } from 'three/tsl';
+     DoubleSide,
+     CanvasTexture,
+     Mesh,
+     MeshBasicMaterial,
+     NodeMaterial,
+     OrthographicCamera,
+     PlaneGeometry,
+     Scene,
+     Texture,
+} from "three";
+import { texture } from "three/tsl";
 
 /**
  * This is a helper for visualising a given light's shadow map.
@@ -31,196 +31,193 @@ import { texture } from 'three/tsl';
  * @three_import import { ShadowMapViewer } from 'three/addons/utils/ShadowMapViewerGPU.js';
  */
 class ShadowMapViewer {
+     /**
+      * Constructs a new shadow map viewer.
+      *
+      * @param {Light} light - The shadow casting light.
+      */
+     constructor(light) {
+          //- Internals
+          const scope = this;
+          const doRenderLabel = light.name !== undefined && light.name !== "";
+          let currentAutoClear;
 
-	/**
-	 * Constructs a new shadow map viewer.
-	 *
-	 * @param {Light} light - The shadow casting light.
-	 */
-	constructor( light ) {
+          //Holds the initial position and dimension of the HUD
+          const frame = {
+               x: 10,
+               y: 10,
+               width: 256,
+               height: 256,
+          };
 
-		//- Internals
-		const scope = this;
-		const doRenderLabel = ( light.name !== undefined && light.name !== '' );
-		let currentAutoClear;
+          const camera = new OrthographicCamera(
+               window.innerWidth / -2,
+               window.innerWidth / 2,
+               window.innerHeight / 2,
+               window.innerHeight / -2,
+               1,
+               10
+          );
+          camera.position.set(0, 0, 2);
+          const scene = new Scene();
 
-		//Holds the initial position and dimension of the HUD
-		const frame = {
-			x: 10,
-			y: 10,
-			width: 256,
-			height: 256
-		};
+          //HUD for shadow map
 
-		const camera = new OrthographicCamera( window.innerWidth / - 2, window.innerWidth / 2, window.innerHeight / 2, window.innerHeight / - 2, 1, 10 );
-		camera.position.set( 0, 0, 2 );
-		const scene = new Scene();
+          const material = new NodeMaterial();
 
-		//HUD for shadow map
+          const shadowMapUniform = texture(new Texture());
+          material.fragmentNode = shadowMapUniform;
 
-		const material = new NodeMaterial();
+          const plane = new PlaneGeometry(frame.width, frame.height);
+          const mesh = new Mesh(plane, material);
 
-		const shadowMapUniform = texture( new Texture() );
-		material.fragmentNode = shadowMapUniform;
+          scene.add(mesh);
 
-		const plane = new PlaneGeometry( frame.width, frame.height );
-		const mesh = new Mesh( plane, material );
+          //Label for light's name
+          let labelCanvas, labelMesh;
 
-		scene.add( mesh );
+          if (doRenderLabel) {
+               labelCanvas = document.createElement("canvas");
 
-		//Label for light's name
-		let labelCanvas, labelMesh;
+               const context = labelCanvas.getContext("2d");
+               context.font = "Bold 20px Arial";
 
-		if ( doRenderLabel ) {
+               const labelWidth = context.measureText(light.name).width;
+               labelCanvas.width = labelWidth;
+               labelCanvas.height = 25; //25 to account for g, p, etc.
 
-			labelCanvas = document.createElement( 'canvas' );
+               context.font = "Bold 20px Arial";
+               context.fillStyle = "rgba( 255, 0, 0, 1 )";
+               context.fillText(light.name, 0, 20);
 
-			const context = labelCanvas.getContext( '2d' );
-			context.font = 'Bold 20px Arial';
+               const labelTexture = new CanvasTexture(labelCanvas);
 
-			const labelWidth = context.measureText( light.name ).width;
-			labelCanvas.width = labelWidth;
-			labelCanvas.height = 25;	//25 to account for g, p, etc.
+               const labelMaterial = new MeshBasicMaterial({
+                    map: labelTexture,
+                    side: DoubleSide,
+                    transparent: true,
+               });
 
-			context.font = 'Bold 20px Arial';
-			context.fillStyle = 'rgba( 255, 0, 0, 1 )';
-			context.fillText( light.name, 0, 20 );
+               const labelPlane = new PlaneGeometry(labelCanvas.width, labelCanvas.height);
+               labelMesh = new Mesh(labelPlane, labelMaterial);
 
-			const labelTexture = new CanvasTexture( labelCanvas );
+               scene.add(labelMesh);
+          }
 
-			const labelMaterial = new MeshBasicMaterial( { map: labelTexture, side: DoubleSide, transparent: true } );
+          function resetPosition() {
+               scope.position.set(scope.position.x, scope.position.y);
+          }
 
-			const labelPlane = new PlaneGeometry( labelCanvas.width, labelCanvas.height );
-			labelMesh = new Mesh( labelPlane, labelMaterial );
+          /**
+           * Whether to display the shadow map viewer or not.
+           *
+           * @type {boolean}
+           * @default true
+           */
+          this.enabled = true;
 
-			scene.add( labelMesh );
+          /**
+           * The size of the viewer. When changing this property, make sure
+           * to call {@link ShadowMapViewer#update}.
+           *
+           * @type {{width:number,height:number}}
+           * @default true
+           */
+          this.size = {
+               width: frame.width,
+               height: frame.height,
+               set: function (width, height) {
+                    this.width = width;
+                    this.height = height;
 
-		}
+                    mesh.scale.set(this.width / frame.width, this.height / frame.height, 1);
 
-		function resetPosition() {
+                    //Reset the position as it is off when we scale stuff
+                    resetPosition();
+               },
+          };
 
-			scope.position.set( scope.position.x, scope.position.y );
+          /**
+           * The position of the viewer. When changing this property, make sure
+           * to call {@link ShadowMapViewer#update}.
+           *
+           * @type {{width:number,height:number}}
+           * @default true
+           */
+          this.position = {
+               x: frame.x,
+               y: frame.y,
+               set: function (x, y) {
+                    this.x = x;
+                    this.y = y;
 
-		}
+                    const width = scope.size.width;
+                    const height = scope.size.height;
 
-		/**
-		 * Whether to display the shadow map viewer or not.
-		 *
-		 * @type {boolean}
-		 * @default true
-		 */
-		this.enabled = true;
+                    mesh.position.set(
+                         -window.innerWidth / 2 + width / 2 + this.x,
+                         window.innerHeight / 2 - height / 2 - this.y,
+                         0
+                    );
 
-		/**
-		 * The size of the viewer. When changing this property, make sure
-		 * to call {@link ShadowMapViewer#update}.
-		 *
-		 * @type {{width:number,height:number}}
-		 * @default true
-		 */
-		this.size = {
-			width: frame.width,
-			height: frame.height,
-			set: function ( width, height ) {
+                    if (doRenderLabel)
+                         labelMesh.position.set(
+                              mesh.position.x,
+                              mesh.position.y - scope.size.height / 2 + labelCanvas.height / 2,
+                              0
+                         );
+               },
+          };
 
-				this.width = width;
-				this.height = height;
+          /**
+           * Renders the viewer. This method must be called in the app's animation loop.
+           *
+           * @param {WebGPURenderer} renderer - The renderer.
+           */
+          this.render = function (renderer) {
+               if (this.enabled) {
+                    //Because a light's .shadowMap is only initialised after the first render pass
+                    //we have to make sure the correct map is sent into the shader, otherwise we
+                    //always end up with the scene's first added shadow casting light's shadowMap
+                    //in the shader
+                    //See: https://github.com/mrdoob/three.js/issues/5932
+                    shadowMapUniform.value = light.shadow.map.texture;
 
-				mesh.scale.set( this.width / frame.width, this.height / frame.height, 1 );
+                    currentAutoClear = renderer.autoClear;
+                    renderer.autoClear = false; // To allow render overlay
+                    renderer.clearDepth();
+                    renderer.render(scene, camera);
+                    renderer.autoClear = currentAutoClear;
+               }
+          };
 
-				//Reset the position as it is off when we scale stuff
-				resetPosition();
+          /**
+           * Resizes the viewer. This method should be called whenever the app's
+           * window is resized.
+           */
+          this.updateForWindowResize = function () {
+               if (this.enabled) {
+                    camera.left = window.innerWidth / -2;
+                    camera.right = window.innerWidth / 2;
+                    camera.top = window.innerHeight / 2;
+                    camera.bottom = window.innerHeight / -2;
+                    camera.updateProjectionMatrix();
 
-			}
-		};
+                    this.update();
+               }
+          };
 
-		/**
-		 * The position of the viewer. When changing this property, make sure
-		 * to call {@link ShadowMapViewer#update}.
-		 *
-		 * @type {{width:number,height:number}}
-		 * @default true
-		 */
-		this.position = {
-			x: frame.x,
-			y: frame.y,
-			set: function ( x, y ) {
+          /**
+           * Updates the viewer.
+           */
+          this.update = function () {
+               this.position.set(this.position.x, this.position.y);
+               this.size.set(this.size.width, this.size.height);
+          };
 
-				this.x = x;
-				this.y = y;
-
-				const width = scope.size.width;
-				const height = scope.size.height;
-
-				mesh.position.set( - window.innerWidth / 2 + width / 2 + this.x, window.innerHeight / 2 - height / 2 - this.y, 0 );
-
-				if ( doRenderLabel ) labelMesh.position.set( mesh.position.x, mesh.position.y - scope.size.height / 2 + labelCanvas.height / 2, 0 );
-
-			}
-		};
-
-		/**
-		 * Renders the viewer. This method must be called in the app's animation loop.
-		 *
-		 * @param {WebGPURenderer} renderer - The renderer.
-		 */
-		this.render = function ( renderer ) {
-
-			if ( this.enabled ) {
-
-				//Because a light's .shadowMap is only initialised after the first render pass
-				//we have to make sure the correct map is sent into the shader, otherwise we
-				//always end up with the scene's first added shadow casting light's shadowMap
-				//in the shader
-				//See: https://github.com/mrdoob/three.js/issues/5932
-				shadowMapUniform.value = light.shadow.map.texture;
-
-				currentAutoClear = renderer.autoClear;
-				renderer.autoClear = false; // To allow render overlay
-				renderer.clearDepth();
-				renderer.render( scene, camera );
-				renderer.autoClear = currentAutoClear;
-
-			}
-
-		};
-
-		/**
-		 * Resizes the viewer. This method should be called whenever the app's
-		 * window is resized.
-		 */
-		this.updateForWindowResize = function () {
-
-			if ( this.enabled ) {
-
-				 camera.left = window.innerWidth / - 2;
-				 camera.right = window.innerWidth / 2;
-				 camera.top = window.innerHeight / 2;
-				 camera.bottom = window.innerHeight / - 2;
-				 camera.updateProjectionMatrix();
-
-				 this.update();
-
-			}
-
-		};
-
-		/**
-		 * Updates the viewer.
-		 */
-		this.update = function () {
-
-			this.position.set( this.position.x, this.position.y );
-			this.size.set( this.size.width, this.size.height );
-
-		};
-
-		//Force an update to set position/size
-		this.update();
-
-	}
-
+          //Force an update to set position/size
+          this.update();
+     }
 }
-
 
 export { ShadowMapViewer };

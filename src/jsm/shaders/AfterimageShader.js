@@ -10,18 +10,15 @@
  * @type {ShaderMaterial~Shader}
  */
 const AfterimageShader = {
+     name: "AfterimageShader",
 
-	name: 'AfterimageShader',
+     uniforms: {
+          damp: { value: 0.96 },
+          tOld: { value: null },
+          tNew: { value: null },
+     },
 
-	uniforms: {
-
-		'damp': { value: 0.96 },
-		'tOld': { value: null },
-		'tNew': { value: null }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -32,7 +29,7 @@ const AfterimageShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform float damp;
 
@@ -56,8 +53,7 @@ const AfterimageShader = {
 
 			gl_FragColor = max(texelNew, texelOld);
 
-		}`
-
+		}`,
 };
 
 export { AfterimageShader };

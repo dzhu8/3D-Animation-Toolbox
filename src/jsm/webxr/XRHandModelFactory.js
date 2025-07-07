@@ -1,14 +1,8 @@
-import {
-	Object3D
-} from 'three';
+import { Object3D } from "three";
 
-import {
-	XRHandPrimitiveModel
-} from './XRHandPrimitiveModel.js';
+import { XRHandPrimitiveModel } from "./XRHandPrimitiveModel.js";
 
-import {
-	XRHandMeshModel
-} from './XRHandMeshModel.js';
+import { XRHandMeshModel } from "./XRHandMeshModel.js";
 
 /**
  * Represents a XR hand model.
@@ -16,67 +10,59 @@ import {
  * @augments Object3D
  */
 class XRHandModel extends Object3D {
+     /**
+      * Constructs a new XR hand model.
+      *
+      * @param {Group} controller - The hand controller.
+      */
+     constructor(controller) {
+          super();
 
-	/**
-	 * Constructs a new XR hand model.
-	 *
-	 * @param {Group} controller - The hand controller.
-	 */
-	constructor( controller ) {
+          /**
+           * The hand controller.
+           *
+           * @type {Group}
+           */
+          this.controller = controller;
 
-		super();
+          /**
+           * The motion controller.
+           *
+           * @type {?MotionController}
+           * @default null
+           */
+          this.motionController = null;
 
-		/**
-		 * The hand controller.
-		 *
-		 * @type {Group}
-		 */
-		this.controller = controller;
+          /**
+           * The controller's environment map.
+           *
+           * @type {?Texture}
+           * @default null
+           */
+          this.envMap = null;
 
-		/**
-		 * The motion controller.
-		 *
-		 * @type {?MotionController}
-		 * @default null
-		 */
-		this.motionController = null;
+          /**
+           * The model mesh.
+           *
+           * @type {Mesh}
+           * @default null
+           */
+          this.mesh = null;
+     }
 
-		/**
-		 * The controller's environment map.
-		 *
-		 * @type {?Texture}
-		 * @default null
-		 */
-		this.envMap = null;
+     /**
+      * Overwritten with a custom implementation. Makes sure the motion controller updates the mesh.
+      *
+      * @param {boolean} [force=false] - When set to `true`, a recomputation of world matrices is forced even
+      * when {@link Object3D#matrixWorldAutoUpdate} is set to `false`.
+      */
+     updateMatrixWorld(force) {
+          super.updateMatrixWorld(force);
 
-		/**
-		 * The model mesh.
-		 *
-		 * @type {Mesh}
-		 * @default null
-		 */
-		this.mesh = null;
-
-	}
-
-	/**
-	 * Overwritten with a custom implementation. Makes sure the motion controller updates the mesh.
-	 *
-	 * @param {boolean} [force=false] - When set to `true`, a recomputation of world matrices is forced even
-	 * when {@link Object3D#matrixWorldAutoUpdate} is set to `false`.
-	 */
-	updateMatrixWorld( force ) {
-
-		super.updateMatrixWorld( force );
-
-		if ( this.motionController ) {
-
-			this.motionController.updateMesh();
-
-		}
-
-	}
-
+          if (this.motionController) {
+               this.motionController.updateMesh();
+          }
+     }
 }
 
 /**
@@ -94,108 +80,107 @@ class XRHandModel extends Object3D {
  * @three_import import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
  */
 class XRHandModelFactory {
+     /**
+      * Constructs a new XR hand model factory.
+      *
+      * @param {?GLTFLoader} [gltfLoader=null] - A glTF loader that is used to load hand models.
+      * @param {?Function} [onLoad=null] - A callback that is executed when a hand model has been loaded.
+      */
+     constructor(gltfLoader = null, onLoad = null) {
+          /**
+           * A glTF loader that is used to load hand models.
+           *
+           * @type {?GLTFLoader}
+           * @default null
+           */
+          this.gltfLoader = gltfLoader;
 
-	/**
-	 * Constructs a new XR hand model factory.
-	 *
-	 * @param {?GLTFLoader} [gltfLoader=null] - A glTF loader that is used to load hand models.
-	 * @param {?Function} [onLoad=null] - A callback that is executed when a hand model has been loaded.
-	 */
-	constructor( gltfLoader = null, onLoad = null ) {
+          /**
+           * The path to the model repository.
+           *
+           * @type {?string}
+           * @default null
+           */
+          this.path = null;
 
-		/**
-		 * A glTF loader that is used to load hand models.
-		 *
-		 * @type {?GLTFLoader}
-		 * @default null
-		 */
-		this.gltfLoader = gltfLoader;
+          /**
+           * A callback that is executed when a hand model has been loaded.
+           *
+           * @type {?Function}
+           * @default null
+           */
+          this.onLoad = onLoad;
+     }
 
-		/**
-		 * The path to the model repository.
-		 *
-		 * @type {?string}
-		 * @default null
-		 */
-		this.path = null;
+     /**
+      * Sets the path to the hand model repository.
+      *
+      * @param {string} path - The path to set.
+      * @return {XRHandModelFactory} A reference to this instance.
+      */
+     setPath(path) {
+          this.path = path;
 
-		/**
-		 * A callback that is executed when a hand model has been loaded.
-		 *
-		 * @type {?Function}
-		 * @default null
-		 */
-		this.onLoad = onLoad;
+          return this;
+     }
 
-	}
+     /**
+      * Creates a controller model for the given WebXR hand controller.
+      *
+      * @param {Group} controller - The hand controller.
+      * @param {('spheres'|'boxes'|'mesh')} [profile] - The model profile that defines the model type.
+      * @return {XRHandModel} The XR hand model.
+      */
+     createHandModel(controller, profile) {
+          const handModel = new XRHandModel(controller);
 
-	/**
-	 * Sets the path to the hand model repository.
-	 *
-	 * @param {string} path - The path to set.
-	 * @return {XRHandModelFactory} A reference to this instance.
-	 */
-	setPath( path ) {
+          controller.addEventListener("connected", (event) => {
+               const xrInputSource = event.data;
 
-		this.path = path;
+               if (xrInputSource.hand && !handModel.motionController) {
+                    handModel.xrInputSource = xrInputSource;
 
-		return this;
+                    // @todo Detect profile if not provided
+                    if (profile === undefined || profile === "spheres") {
+                         handModel.motionController = new XRHandPrimitiveModel(
+                              handModel,
+                              controller,
+                              this.path,
+                              xrInputSource.handedness,
+                              { primitive: "sphere" }
+                         );
+                    } else if (profile === "boxes") {
+                         handModel.motionController = new XRHandPrimitiveModel(
+                              handModel,
+                              controller,
+                              this.path,
+                              xrInputSource.handedness,
+                              { primitive: "box" }
+                         );
+                    } else if (profile === "mesh") {
+                         handModel.motionController = new XRHandMeshModel(
+                              handModel,
+                              controller,
+                              this.path,
+                              xrInputSource.handedness,
+                              this.gltfLoader,
+                              this.onLoad
+                         );
+                    }
+               }
 
-	}
+               controller.visible = true;
+          });
 
-	/**
-	 * Creates a controller model for the given WebXR hand controller.
-	 *
-	 * @param {Group} controller - The hand controller.
-	 * @param {('spheres'|'boxes'|'mesh')} [profile] - The model profile that defines the model type.
-	 * @return {XRHandModel} The XR hand model.
-	 */
-	createHandModel( controller, profile ) {
+          controller.addEventListener("disconnected", () => {
+               controller.visible = false;
+               // handModel.motionController = null;
+               // handModel.remove( scene );
+               // scene = null;
+          });
 
-		const handModel = new XRHandModel( controller );
-
-		controller.addEventListener( 'connected', ( event ) => {
-
-			const xrInputSource = event.data;
-
-			if ( xrInputSource.hand && ! handModel.motionController ) {
-
-				handModel.xrInputSource = xrInputSource;
-
-				// @todo Detect profile if not provided
-				if ( profile === undefined || profile === 'spheres' ) {
-
-					handModel.motionController = new XRHandPrimitiveModel( handModel, controller, this.path, xrInputSource.handedness, { primitive: 'sphere' } );
-
-				} else if ( profile === 'boxes' ) {
-
-					handModel.motionController = new XRHandPrimitiveModel( handModel, controller, this.path, xrInputSource.handedness, { primitive: 'box' } );
-
-				} else if ( profile === 'mesh' ) {
-
-					handModel.motionController = new XRHandMeshModel( handModel, controller, this.path, xrInputSource.handedness, this.gltfLoader, this.onLoad );
-
-				}
-
-			}
-
-			controller.visible = true;
-
-		} );
-
-		controller.addEventListener( 'disconnected', () => {
-
-			controller.visible = false;
-			// handModel.motionController = null;
-			// handModel.remove( scene );
-			// scene = null;
-
-		} );
-
-		return handModel;
-
-	}
-
+          return handModel;
+     }
 }
 
 export { XRHandModelFactory };

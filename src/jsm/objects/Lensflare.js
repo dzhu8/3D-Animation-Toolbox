@@ -1,98 +1,94 @@
 import {
-	AdditiveBlending,
-	Box2,
-	BufferGeometry,
-	Color,
-	FramebufferTexture,
-	InterleavedBuffer,
-	InterleavedBufferAttribute,
-	Mesh,
-	MeshBasicMaterial,
-	RawShaderMaterial,
-	UnsignedByteType,
-	Vector2,
-	Vector3,
-	Vector4
-} from 'three';
+     AdditiveBlending,
+     Box2,
+     BufferGeometry,
+     Color,
+     FramebufferTexture,
+     InterleavedBuffer,
+     InterleavedBufferAttribute,
+     Mesh,
+     MeshBasicMaterial,
+     RawShaderMaterial,
+     UnsignedByteType,
+     Vector2,
+     Vector3,
+     Vector4,
+} from "three";
 
 /**
  * Creates a simulated lens flare that tracks a light.
  *
- * Note that this class can only be used with {@link WebGLRenderer}.
- * When using {@link WebGPURenderer}, use {@link LensflareMesh}.
+ * Note that this class can only be used with {@link WebGLRenderer}. When using {@link WebGPURenderer}, use
+ * {@link LensflareMesh}.
  *
  * ```js
- * const light = new THREE.PointLight( 0xffffff, 1.5, 2000 );
+ * const light = new THREE.PointLight(0xffffff, 1.5, 2000);
  *
  * const lensflare = new Lensflare();
- * lensflare.addElement( new LensflareElement( textureFlare0, 512, 0 ) );
- * lensflare.addElement( new LensflareElement( textureFlare1, 512, 0 ) );
- * lensflare.addElement( new LensflareElement( textureFlare2, 60, 0.6 ) );
+ * lensflare.addElement(new LensflareElement(textureFlare0, 512, 0));
+ * lensflare.addElement(new LensflareElement(textureFlare1, 512, 0));
+ * lensflare.addElement(new LensflareElement(textureFlare2, 60, 0.6));
  *
- * light.add( lensflare );
+ * light.add(lensflare);
  * ```
  *
  * @augments Mesh
  * @three_import import { Lensflare } from 'three/addons/objects/Lensflare.js';
  */
 class Lensflare extends Mesh {
+     /** Constructs a new lensflare. */
+     constructor() {
+          super(Lensflare.Geometry, new MeshBasicMaterial({ opacity: 0, transparent: true }));
 
-	/**
-	 * Constructs a new lensflare.
-	 */
-	constructor() {
+          /**
+           * This flag can be used for type testing.
+           *
+           * @default true
+           * @type {boolean}
+           * @readonly
+           */
+          this.isLensflare = true;
 
-		super( Lensflare.Geometry, new MeshBasicMaterial( { opacity: 0, transparent: true } ) );
+          this.type = "Lensflare";
 
-		/**
-		 * This flag can be used for type testing.
-		 *
-		 * @type {boolean}
-		 * @readonly
-		 * @default true
-		 */
-		this.isLensflare = true;
+          /**
+           * Overwritten to disable view-frustum culling by default.
+           *
+           * @default false
+           * @type {boolean}
+           */
+          this.frustumCulled = false;
 
-		this.type = 'Lensflare';
+          /**
+           * Overwritten to make sure lensflares a rendered last.
+           *
+           * @default Infinity
+           * @type {number}
+           */
+          this.renderOrder = Infinity;
 
-		/**
-		 * Overwritten to disable view-frustum culling by default.
-		 *
-		 * @type {boolean}
-		 * @default false
-		 */
-		this.frustumCulled = false;
+          //
 
-		/**
-		 * Overwritten to make sure lensflares a rendered last.
-		 *
-		 * @type {number}
-		 * @default Infinity
-		 */
-		this.renderOrder = Infinity;
+          const positionScreen = new Vector3();
+          const positionView = new Vector3();
 
-		//
+          // textures
 
-		const positionScreen = new Vector3();
-		const positionView = new Vector3();
+          const tempMap = new FramebufferTexture(16, 16);
+          const occlusionMap = new FramebufferTexture(16, 16);
 
-		// textures
+          let currentType = UnsignedByteType;
 
-		const tempMap = new FramebufferTexture( 16, 16 );
-		const occlusionMap = new FramebufferTexture( 16, 16 );
+          // material
 
-		let currentType = UnsignedByteType;
+          const geometry = Lensflare.Geometry;
 
-		// material
-
-		const geometry = Lensflare.Geometry;
-
-		const material1a = new RawShaderMaterial( {
-			uniforms: {
-				'scale': { value: null },
-				'screenPosition': { value: null }
-			},
-			vertexShader: /* glsl */`
+          const material1a = new RawShaderMaterial({
+               uniforms: {
+                    scale: { value: null },
+                    screenPosition: { value: null },
+               },
+               vertexShader: /* glsl */ `
 
 				precision highp float;
 
@@ -107,7 +103,7 @@ class Lensflare extends Mesh {
 
 				}`,
 
-			fragmentShader: /* glsl */`
+               fragmentShader: /* glsl */ `
 
 				precision highp float;
 
@@ -116,18 +112,18 @@ class Lensflare extends Mesh {
 					gl_FragColor = vec4( 1.0, 0.0, 1.0, 1.0 );
 
 				}`,
-			depthTest: true,
-			depthWrite: false,
-			transparent: false
-		} );
+               depthTest: true,
+               depthWrite: false,
+               transparent: false,
+          });
 
-		const material1b = new RawShaderMaterial( {
-			uniforms: {
-				'map': { value: tempMap },
-				'scale': { value: null },
-				'screenPosition': { value: null }
-			},
-			vertexShader: /* glsl */`
+          const material1b = new RawShaderMaterial({
+               uniforms: {
+                    map: { value: tempMap },
+                    scale: { value: null },
+                    screenPosition: { value: null },
+               },
+               vertexShader: /* glsl */ `
 
 				precision highp float;
 
@@ -147,7 +143,7 @@ class Lensflare extends Mesh {
 
 				}`,
 
-			fragmentShader: /* glsl */`
+               fragmentShader: /* glsl */ `
 
 				precision highp float;
 
@@ -160,181 +156,165 @@ class Lensflare extends Mesh {
 					gl_FragColor = texture2D( map, vUV );
 
 				}`,
-			depthTest: false,
-			depthWrite: false,
-			transparent: false
-		} );
+               depthTest: false,
+               depthWrite: false,
+               transparent: false,
+          });
 
-		// the following object is used for occlusionMap generation
+          // the following object is used for occlusionMap generation
 
-		const mesh1 = new Mesh( geometry, material1a );
+          const mesh1 = new Mesh(geometry, material1a);
 
-		//
+          //
 
-		const elements = [];
+          const elements = [];
 
-		const shader = LensflareElement.Shader;
+          const shader = LensflareElement.Shader;
 
-		const material2 = new RawShaderMaterial( {
-			name: shader.name,
-			uniforms: {
-				'map': { value: null },
-				'occlusionMap': { value: occlusionMap },
-				'color': { value: new Color( 0xffffff ) },
-				'scale': { value: new Vector2() },
-				'screenPosition': { value: new Vector3() }
-			},
-			vertexShader: shader.vertexShader,
-			fragmentShader: shader.fragmentShader,
-			blending: AdditiveBlending,
-			transparent: true,
-			depthWrite: false
-		} );
+          const material2 = new RawShaderMaterial({
+               name: shader.name,
+               uniforms: {
+                    map: { value: null },
+                    occlusionMap: { value: occlusionMap },
+                    color: { value: new Color(0xffffff) },
+                    scale: { value: new Vector2() },
+                    screenPosition: { value: new Vector3() },
+               },
+               vertexShader: shader.vertexShader,
+               fragmentShader: shader.fragmentShader,
+               blending: AdditiveBlending,
+               transparent: true,
+               depthWrite: false,
+          });
 
-		const mesh2 = new Mesh( geometry, material2 );
+          const mesh2 = new Mesh(geometry, material2);
 
-		/**
-		 * Adds the given lensflare element to this instance.
-		 *
-		 * @param {LensflareElement} element - The element to add.
-		 */
-		this.addElement = function ( element ) {
+          /**
+           * Adds the given lensflare element to this instance.
+           *
+           * @param {LensflareElement} element - The element to add.
+           */
+          this.addElement = function (element) {
+               elements.push(element);
+          };
 
-			elements.push( element );
+          //
 
-		};
+          const scale = new Vector2();
+          const screenPositionPixels = new Vector2();
+          const validArea = new Box2();
+          const viewport = new Vector4();
 
-		//
+          this.onBeforeRender = function (renderer, scene, camera) {
+               renderer.getCurrentViewport(viewport);
 
-		const scale = new Vector2();
-		const screenPositionPixels = new Vector2();
-		const validArea = new Box2();
-		const viewport = new Vector4();
+               const renderTarget = renderer.getRenderTarget();
+               const type = renderTarget !== null ? renderTarget.texture.type : UnsignedByteType;
 
-		this.onBeforeRender = function ( renderer, scene, camera ) {
+               if (currentType !== type) {
+                    tempMap.dispose();
+                    occlusionMap.dispose();
 
-			renderer.getCurrentViewport( viewport );
+                    tempMap.type = occlusionMap.type = type;
 
-			const renderTarget = renderer.getRenderTarget();
-			const type = ( renderTarget !== null ) ? renderTarget.texture.type : UnsignedByteType;
+                    currentType = type;
+               }
 
-			if ( currentType !== type ) {
+               const invAspect = viewport.w / viewport.z;
+               const halfViewportWidth = viewport.z / 2.0;
+               const halfViewportHeight = viewport.w / 2.0;
 
-				tempMap.dispose();
-				occlusionMap.dispose();
+               let size = 16 / viewport.w;
+               scale.set(size * invAspect, size);
 
-				tempMap.type = occlusionMap.type = type;
+               validArea.min.set(viewport.x, viewport.y);
+               validArea.max.set(viewport.x + (viewport.z - 16), viewport.y + (viewport.w - 16));
 
-				currentType = type;
+               // calculate position in screen space
 
-			}
+               positionView.setFromMatrixPosition(this.matrixWorld);
+               positionView.applyMatrix4(camera.matrixWorldInverse);
 
-			const invAspect = viewport.w / viewport.z;
-			const halfViewportWidth = viewport.z / 2.0;
-			const halfViewportHeight = viewport.w / 2.0;
+               if (positionView.z > 0) return; // lensflare is behind the camera
 
-			let size = 16 / viewport.w;
-			scale.set( size * invAspect, size );
+               positionScreen.copy(positionView).applyMatrix4(camera.projectionMatrix);
 
-			validArea.min.set( viewport.x, viewport.y );
-			validArea.max.set( viewport.x + ( viewport.z - 16 ), viewport.y + ( viewport.w - 16 ) );
+               // horizontal and vertical coordinate of the lower left corner of the pixels to copy
 
-			// calculate position in screen space
+               screenPositionPixels.x = viewport.x + positionScreen.x * halfViewportWidth + halfViewportWidth - 8;
+               screenPositionPixels.y = viewport.y + positionScreen.y * halfViewportHeight + halfViewportHeight - 8;
 
-			positionView.setFromMatrixPosition( this.matrixWorld );
-			positionView.applyMatrix4( camera.matrixWorldInverse );
+               // screen cull
 
-			if ( positionView.z > 0 ) return; // lensflare is behind the camera
+               if (validArea.containsPoint(screenPositionPixels)) {
+                    // save current RGB to temp texture
 
-			positionScreen.copy( positionView ).applyMatrix4( camera.projectionMatrix );
+                    renderer.copyFramebufferToTexture(tempMap, screenPositionPixels);
 
-			// horizontal and vertical coordinate of the lower left corner of the pixels to copy
+                    // render pink quad
 
-			screenPositionPixels.x = viewport.x + ( positionScreen.x * halfViewportWidth ) + halfViewportWidth - 8;
-			screenPositionPixels.y = viewport.y + ( positionScreen.y * halfViewportHeight ) + halfViewportHeight - 8;
+                    let uniforms = material1a.uniforms;
+                    uniforms["scale"].value = scale;
+                    uniforms["screenPosition"].value = positionScreen;
 
-			// screen cull
+                    renderer.renderBufferDirect(camera, null, geometry, material1a, mesh1, null);
 
-			if ( validArea.containsPoint( screenPositionPixels ) ) {
+                    // copy result to occlusionMap
 
-				// save current RGB to temp texture
+                    renderer.copyFramebufferToTexture(occlusionMap, screenPositionPixels);
 
-				renderer.copyFramebufferToTexture( tempMap, screenPositionPixels );
+                    // restore graphics
 
-				// render pink quad
+                    uniforms = material1b.uniforms;
+                    uniforms["scale"].value = scale;
+                    uniforms["screenPosition"].value = positionScreen;
 
-				let uniforms = material1a.uniforms;
-				uniforms[ 'scale' ].value = scale;
-				uniforms[ 'screenPosition' ].value = positionScreen;
+                    renderer.renderBufferDirect(camera, null, geometry, material1b, mesh1, null);
 
-				renderer.renderBufferDirect( camera, null, geometry, material1a, mesh1, null );
+                    // render elements
 
-				// copy result to occlusionMap
+                    const vecX = -positionScreen.x * 2;
+                    const vecY = -positionScreen.y * 2;
 
-				renderer.copyFramebufferToTexture( occlusionMap, screenPositionPixels );
+                    for (let i = 0, l = elements.length; i < l; i++) {
+                         const element = elements[i];
 
-				// restore graphics
+                         const uniforms = material2.uniforms;
 
-				uniforms = material1b.uniforms;
-				uniforms[ 'scale' ].value = scale;
-				uniforms[ 'screenPosition' ].value = positionScreen;
+                         uniforms["color"].value.copy(element.color);
+                         uniforms["map"].value = element.texture;
+                         uniforms["screenPosition"].value.x = positionScreen.x + vecX * element.distance;
+                         uniforms["screenPosition"].value.y = positionScreen.y + vecY * element.distance;
 
-				renderer.renderBufferDirect( camera, null, geometry, material1b, mesh1, null );
+                         size = element.size / viewport.w;
+                         const invAspect = viewport.w / viewport.z;
 
-				// render elements
+                         uniforms["scale"].value.set(size * invAspect, size);
 
-				const vecX = - positionScreen.x * 2;
-				const vecY = - positionScreen.y * 2;
+                         material2.uniformsNeedUpdate = true;
 
-				for ( let i = 0, l = elements.length; i < l; i ++ ) {
+                         renderer.renderBufferDirect(camera, null, geometry, material2, mesh2, null);
+                    }
+               }
+          };
 
-					const element = elements[ i ];
+          /**
+           * Frees the GPU-related resources allocated by this instance. Call this method whenever this instance is no
+           * longer used in your app.
+           */
+          this.dispose = function () {
+               material1a.dispose();
+               material1b.dispose();
+               material2.dispose();
 
-					const uniforms = material2.uniforms;
+               tempMap.dispose();
+               occlusionMap.dispose();
 
-					uniforms[ 'color' ].value.copy( element.color );
-					uniforms[ 'map' ].value = element.texture;
-					uniforms[ 'screenPosition' ].value.x = positionScreen.x + vecX * element.distance;
-					uniforms[ 'screenPosition' ].value.y = positionScreen.y + vecY * element.distance;
-
-					size = element.size / viewport.w;
-					const invAspect = viewport.w / viewport.z;
-
-					uniforms[ 'scale' ].value.set( size * invAspect, size );
-
-					material2.uniformsNeedUpdate = true;
-
-					renderer.renderBufferDirect( camera, null, geometry, material2, mesh2, null );
-
-				}
-
-			}
-
-		};
-
-		/**
-		 * Frees the GPU-related resources allocated by this instance. Call this
-		 * method whenever this instance is no longer used in your app.
-		 */
-		this.dispose = function () {
-
-			material1a.dispose();
-			material1b.dispose();
-			material2.dispose();
-
-			tempMap.dispose();
-			occlusionMap.dispose();
-
-			for ( let i = 0, l = elements.length; i < l; i ++ ) {
-
-				elements[ i ].texture.dispose();
-
-			}
-
-		};
-
-	}
-
+               for (let i = 0, l = elements.length; i < l; i++) {
+                    elements[i].texture.dispose();
+               }
+          };
+     }
 }
 
 /**
@@ -343,69 +323,62 @@ class Lensflare extends Mesh {
  * @three_import import { LensflareElement } from 'three/addons/objects/Lensflare.js';
  */
 class LensflareElement {
+     /**
+      * Constructs a new lensflare element.
+      *
+      * @param {Texture} texture - The flare's texture.
+      * @param {number} [size=1] - The size in pixels. Default is `1`
+      * @param {number} [distance=0] - The normalized distance (`[0,1]`) from the light source. A value of `0` means the
+      *   flare is located at light source. Default is `0`
+      * @param {Color} [color] - The flare's color
+      */
+     constructor(texture, size = 1, distance = 0, color = new Color(0xffffff)) {
+          /**
+           * The flare's texture.
+           *
+           * @type {Texture}
+           */
+          this.texture = texture;
 
-	/**
-	 * Constructs a new lensflare element.
-	 *
-	 * @param {Texture} texture - The flare's texture.
-	 * @param {number} [size=1] - The size in pixels.
-	 * @param {number} [distance=0] - The normalized distance (`[0,1]`) from the light source.
-	 * A value of `0` means the flare is located at light source.
-	 * @param {Color} [color] - The flare's color
-	 */
-	constructor( texture, size = 1, distance = 0, color = new Color( 0xffffff ) ) {
+          /**
+           * The size in pixels.
+           *
+           * @default 1
+           * @type {number}
+           */
+          this.size = size;
 
-		/**
-		 * The flare's texture.
-		 *
-		 * @type {Texture}
-		 */
-		this.texture = texture;
+          /**
+           * The normalized distance (`[0,1]`) from the light source. A value of `0` means the flare is located at light
+           * source.
+           *
+           * @default 0
+           * @type {number}
+           */
+          this.distance = distance;
 
-		/**
-		 * The size in pixels.
-		 *
-		 * @type {number}
-		 * @default 1
-		 */
-		this.size = size;
-
-		/**
-		 * The normalized distance (`[0,1]`) from the light source.
-		 * A value of `0` means the flare is located at light source.
-		 *
-		 * @type {number}
-		 * @default 0
-		 */
-		this.distance = distance;
-
-		/**
-		 * The flare's color
-		 *
-		 * @type {Color}
-		 * @default (1,1,1)
-		 */
-		this.color = color;
-
-	}
-
+          /**
+           * The flare's color
+           *
+           * @default (1,1,1)
+           * @type {Color}
+           */
+          this.color = color;
+     }
 }
 
 LensflareElement.Shader = {
+     name: "LensflareElementShader",
 
-	name: 'LensflareElementShader',
+     uniforms: {
+          map: { value: null },
+          occlusionMap: { value: null },
+          color: { value: null },
+          scale: { value: null },
+          screenPosition: { value: null },
+     },
 
-	uniforms: {
-
-		'map': { value: null },
-		'occlusionMap': { value: null },
-		'color': { value: null },
-		'scale': { value: null },
-		'screenPosition': { value: null }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		precision highp float;
 
@@ -444,7 +417,7 @@ LensflareElement.Shader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		precision highp float;
 
@@ -461,29 +434,21 @@ LensflareElement.Shader = {
 			gl_FragColor = texture;
 			gl_FragColor.rgb *= color;
 
-		}`
-
+		}`,
 };
 
-Lensflare.Geometry = ( function () {
+Lensflare.Geometry = (function () {
+     const geometry = new BufferGeometry();
 
-	const geometry = new BufferGeometry();
+     const float32Array = new Float32Array([-1, -1, 0, 0, 0, 1, -1, 0, 1, 0, 1, 1, 0, 1, 1, -1, 1, 0, 0, 1]);
 
-	const float32Array = new Float32Array( [
-		- 1, - 1, 0, 0, 0,
-		1, - 1, 0, 1, 0,
-		1, 1, 0, 1, 1,
-		- 1, 1, 0, 0, 1
-	] );
+     const interleavedBuffer = new InterleavedBuffer(float32Array, 5);
 
-	const interleavedBuffer = new InterleavedBuffer( float32Array, 5 );
+     geometry.setIndex([0, 1, 2, 0, 2, 3]);
+     geometry.setAttribute("position", new InterleavedBufferAttribute(interleavedBuffer, 3, 0, false));
+     geometry.setAttribute("uv", new InterleavedBufferAttribute(interleavedBuffer, 2, 3, false));
 
-	geometry.setIndex( [ 0, 1, 2,	0, 2, 3 ] );
-	geometry.setAttribute( 'position', new InterleavedBufferAttribute( interleavedBuffer, 3, 0, false ) );
-	geometry.setAttribute( 'uv', new InterleavedBufferAttribute( interleavedBuffer, 2, 3, false ) );
-
-	return geometry;
-
-} )();
+     return geometry;
+})();
 
 export { Lensflare, LensflareElement };

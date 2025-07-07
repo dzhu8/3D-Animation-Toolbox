@@ -7,22 +7,20 @@
  * Gamma Correction Shader
  *
  * References:
+ *
  * - {@link http://en.wikipedia.org/wiki/gamma_correction}.
  *
  * @constant
  * @type {ShaderMaterial~Shader}
  */
 const GammaCorrectionShader = {
+     name: "GammaCorrectionShader",
 
-	name: 'GammaCorrectionShader',
+     uniforms: {
+          tDiffuse: { value: null },
+     },
 
-	uniforms: {
-
-		'tDiffuse': { value: null }
-
-	},
-
-	vertexShader: /* glsl */`
+     vertexShader: /* glsl */ `
 
 		varying vec2 vUv;
 
@@ -33,7 +31,7 @@ const GammaCorrectionShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+     fragmentShader: /* glsl */ `
 
 		uniform sampler2D tDiffuse;
 
@@ -45,8 +43,7 @@ const GammaCorrectionShader = {
 
 			gl_FragColor = sRGBTransferOETF( tex );
 
-		}`
-
+		}`,
 };
 
 export { GammaCorrectionShader };

@@ -1,155 +1,130 @@
-import {
-	LinearFilter,
-	NearestFilter,
-	RGBAFormat,
-	ShaderMaterial,
-	StereoCamera,
-	WebGLRenderTarget
-} from 'three';
-import { FullScreenQuad } from '../postprocessing/Pass.js';
+import { LinearFilter, NearestFilter, RGBAFormat, ShaderMaterial, StereoCamera, WebGLRenderTarget } from "three";
+import { FullScreenQuad } from "../postprocessing/Pass.js";
 
 /**
  * A class that creates an parallax barrier effect.
  *
- * Note that this class can only be used with {@link WebGLRenderer}.
- * When using {@link WebGPURenderer}, use {@link ParallaxBarrierPassNode}.
+ * Note that this class can only be used with {@link WebGLRenderer}. When using {@link WebGPURenderer}, use
+ * {@link ParallaxBarrierPassNode}.
  *
  * @three_import import { ParallaxBarrierEffect } from 'three/addons/effects/ParallaxBarrierEffect.js';
  */
 class ParallaxBarrierEffect {
+     /**
+      * Constructs a new parallax barrier effect.
+      *
+      * @param {WebGLRenderer} renderer - The renderer.
+      */
+     constructor(renderer) {
+          const _stereo = new StereoCamera();
 
-	/**
-	 * Constructs a new parallax barrier effect.
-	 *
-	 * @param {WebGLRenderer} renderer - The renderer.
-	 */
-	constructor( renderer ) {
+          const _params = {
+               minFilter: LinearFilter,
+               magFilter: NearestFilter,
+               format: RGBAFormat,
+          };
 
-		const _stereo = new StereoCamera();
+          const _renderTargetL = new WebGLRenderTarget(512, 512, _params);
+          const _renderTargetR = new WebGLRenderTarget(512, 512, _params);
 
-		const _params = { minFilter: LinearFilter, magFilter: NearestFilter, format: RGBAFormat };
+          const _material = new ShaderMaterial({
+               uniforms: {
+                    mapLeft: { value: _renderTargetL.texture },
+                    mapRight: { value: _renderTargetR.texture },
+               },
 
-		const _renderTargetL = new WebGLRenderTarget( 512, 512, _params );
-		const _renderTargetR = new WebGLRenderTarget( 512, 512, _params );
+               vertexShader: [
+                    "varying vec2 vUv;",
 
-		const _material = new ShaderMaterial( {
+                    "void main() {",
 
-			uniforms: {
+                    "	vUv = vec2( uv.x, uv.y );",
+                    "	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );",
 
-				'mapLeft': { value: _renderTargetL.texture },
-				'mapRight': { value: _renderTargetR.texture }
+                    "}",
+               ].join("\n"),
 
-			},
+               fragmentShader: [
+                    "uniform sampler2D mapLeft;",
+                    "uniform sampler2D mapRight;",
+                    "varying vec2 vUv;",
 
-			vertexShader: [
+                    "void main() {",
 
-				'varying vec2 vUv;',
+                    "	vec2 uv = vUv;",
 
-				'void main() {',
+                    "	if ( ( mod( gl_FragCoord.y, 2.0 ) ) > 1.00 ) {",
 
-				'	vUv = vec2( uv.x, uv.y );',
-				'	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );',
+                    "		gl_FragColor = texture2D( mapLeft, uv );",
 
-				'}'
+                    "	} else {",
 
-			].join( '\n' ),
+                    "		gl_FragColor = texture2D( mapRight, uv );",
 
-			fragmentShader: [
+                    "	}",
 
-				'uniform sampler2D mapLeft;',
-				'uniform sampler2D mapRight;',
-				'varying vec2 vUv;',
+                    "	#include <tonemapping_fragment>",
+                    "	#include <colorspace_fragment>",
 
-				'void main() {',
+                    "}",
+               ].join("\n"),
+          });
 
-				'	vec2 uv = vUv;',
+          const _quad = new FullScreenQuad(_material);
 
-				'	if ( ( mod( gl_FragCoord.y, 2.0 ) ) > 1.00 ) {',
+          /**
+           * Resizes the effect.
+           *
+           * @param {number} width - The width of the effect in logical pixels.
+           * @param {number} height - The height of the effect in logical pixels.
+           */
+          this.setSize = function (width, height) {
+               renderer.setSize(width, height);
 
-				'		gl_FragColor = texture2D( mapLeft, uv );',
+               const pixelRatio = renderer.getPixelRatio();
 
-				'	} else {',
+               _renderTargetL.setSize(width * pixelRatio, height * pixelRatio);
+               _renderTargetR.setSize(width * pixelRatio, height * pixelRatio);
+          };
 
-				'		gl_FragColor = texture2D( mapRight, uv );',
+          /**
+           * When using this effect, this method should be called instead of the default {@link WebGLRenderer#render}.
+           *
+           * @param {Object3D} scene - The scene to render.
+           * @param {Camera} camera - The camera.
+           */
+          this.render = function (scene, camera) {
+               const currentRenderTarget = renderer.getRenderTarget();
 
-				'	}',
+               if (scene.matrixWorldAutoUpdate === true) scene.updateMatrixWorld();
 
-				'	#include <tonemapping_fragment>',
-				'	#include <colorspace_fragment>',
+               if (camera.parent === null && camera.matrixWorldAutoUpdate === true) camera.updateMatrixWorld();
 
-				'}'
+               _stereo.update(camera);
 
-			].join( '\n' )
+               renderer.setRenderTarget(_renderTargetL);
+               renderer.clear();
+               renderer.render(scene, _stereo.cameraL);
 
-		} );
+               renderer.setRenderTarget(_renderTargetR);
+               renderer.clear();
+               renderer.render(scene, _stereo.cameraR);
 
-		const _quad = new FullScreenQuad( _material );
+               renderer.setRenderTarget(null);
+               _quad.render(renderer);
 
-		/**
-		 * Resizes the effect.
-		 *
-		 * @param {number} width - The width of the effect in logical pixels.
-		 * @param {number} height - The height of the effect in logical pixels.
-		 */
-		this.setSize = function ( width, height ) {
+               renderer.setRenderTarget(currentRenderTarget);
+          };
 
-			renderer.setSize( width, height );
+          /** Frees internal resources. This method should be called when the effect is no longer required. */
+          this.dispose = function () {
+               _renderTargetL.dispose();
+               _renderTargetR.dispose();
 
-			const pixelRatio = renderer.getPixelRatio();
-
-			_renderTargetL.setSize( width * pixelRatio, height * pixelRatio );
-			_renderTargetR.setSize( width * pixelRatio, height * pixelRatio );
-
-		};
-
-		/**
-		 * When using this effect, this method should be called instead of the
-		 * default {@link WebGLRenderer#render}.
-		 *
-		 * @param {Object3D} scene - The scene to render.
-		 * @param {Camera} camera - The camera.
-		 */
-		this.render = function ( scene, camera ) {
-
-			const currentRenderTarget = renderer.getRenderTarget();
-
-			if ( scene.matrixWorldAutoUpdate === true ) scene.updateMatrixWorld();
-
-			if ( camera.parent === null && camera.matrixWorldAutoUpdate === true ) camera.updateMatrixWorld();
-
-			_stereo.update( camera );
-
-			renderer.setRenderTarget( _renderTargetL );
-			renderer.clear();
-			renderer.render( scene, _stereo.cameraL );
-
-			renderer.setRenderTarget( _renderTargetR );
-			renderer.clear();
-			renderer.render( scene, _stereo.cameraR );
-
-			renderer.setRenderTarget( null );
-			_quad.render( renderer );
-
-			renderer.setRenderTarget( currentRenderTarget );
-
-		};
-
-		/**
-		 * Frees internal resources. This method should be called
-		 * when the effect is no longer required.
-		 */
-		this.dispose = function () {
-
-			_renderTargetL.dispose();
-			_renderTargetR.dispose();
-
-			_material.dispose();
-			_quad.dispose();
-
-		};
-
-	}
-
+               _material.dispose();
+               _quad.dispose();
+          };
+     }
 }
 
 export { ParallaxBarrierEffect };
