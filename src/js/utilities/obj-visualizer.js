@@ -20,6 +20,7 @@ class ModelVisualizer {
         this.faceSelectionMode = false;
         this.selectedFace = null;
         this.highlightMaterial = null;
+        this.mouseDownPosition = null;
         
         this.init();
         this.setupEventListeners();
@@ -73,7 +74,7 @@ class ModelVisualizer {
 
     setupLighting() {
         // Ambient light
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.9);
         this.scene.add(ambientLight);
 
         // Directional light
@@ -146,9 +147,15 @@ class ModelVisualizer {
         });
 
         // Mouse events for face selection
-        this.renderer.domElement.addEventListener('click', (e) => {
+        this.renderer.domElement.addEventListener('mousedown', (e) => {
             if (this.faceSelectionMode && this.currentModel) {
-                this.onMouseClick(e);
+                this.onMouseDown(e);
+            }
+        });
+
+        this.renderer.domElement.addEventListener('mouseup', (e) => {
+            if (this.faceSelectionMode && this.currentModel) {
+                this.onMouseUp(e);
             }
         });
 
@@ -230,7 +237,7 @@ class ModelVisualizer {
         } else if (result.isGeometry || result.isBufferGeometry) {
             // For geometries (PLY, STL)
             const material = new THREE.MeshLambertMaterial({ 
-                color: 0x888888,
+                color: 0xffffff,  // White color
                 side: THREE.DoubleSide
             });
             object = new THREE.Mesh(result, material);
@@ -244,9 +251,14 @@ class ModelVisualizer {
             if (child.isMesh) {
                 if (!child.material) {
                     child.material = new THREE.MeshLambertMaterial({ 
-                        color: 0x888888,
+                        color: 0xffffff,  // White color
                         side: THREE.DoubleSide
                     });
+                }
+                
+                // Override material to be white
+                if (child.material) {
+                    child.material.color.setHex(0xffffff);  // Set to white
                 }
                 
                 // Store original materials for face selection
@@ -255,6 +267,9 @@ class ModelVisualizer {
                 // Enable shadows
                 child.castShadow = true;
                 child.receiveShadow = true;
+                
+                // Add wireframe overlay for edges
+                this.addWireframeOverlay(child);
             }
         });
 
@@ -270,6 +285,28 @@ class ModelVisualizer {
         this.hideLoading();
 
         console.log('Model loaded successfully:', object);
+    }
+
+    addWireframeOverlay(mesh) {
+        // Create wireframe geometry
+        const wireframeGeometry = new THREE.WireframeGeometry(mesh.geometry);
+        
+        // Create black wireframe material
+        const wireframeMaterial = new THREE.LineBasicMaterial({ 
+            color: 0x000000,  // Black color
+            linewidth: 1,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        // Create wireframe mesh
+        const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
+        
+        // Add wireframe as child of the mesh so it moves with the mesh
+        mesh.add(wireframe);
+        
+        // Store reference for cleanup
+        mesh.userData.wireframe = wireframe;
     }
 
     centerAndScaleModel(object) {
@@ -347,7 +384,8 @@ class ModelVisualizer {
         const faceInfo = document.getElementById('faceInfo');
         if (this.faceSelectionMode) {
             faceInfo.style.display = 'block';
-            this.controls.enabled = false; // Disable orbit controls in face selection mode
+            // Keep orbit controls enabled in face selection mode
+            this.controls.enabled = true;
         } else {
             faceInfo.style.display = 'none';
             this.controls.enabled = true;
@@ -355,6 +393,39 @@ class ModelVisualizer {
         }
 
         console.log('Face selection mode:', this.faceSelectionMode ? 'ON' : 'OFF');
+    }
+
+    onMouseDown(event) {
+        if (!this.currentModel) return;
+
+        // Store the mouse down position
+        this.mouseDownPosition = {
+            x: event.clientX,
+            y: event.clientY
+        };
+    }
+
+    onMouseUp(event) {
+        if (!this.currentModel || !this.mouseDownPosition) return;
+
+        // Calculate how much the mouse moved during the click
+        const mouseUpPosition = {
+            x: event.clientX,
+            y: event.clientY
+        };
+
+        const mouseMoveDistance = Math.sqrt(
+            Math.pow(mouseUpPosition.x - this.mouseDownPosition.x, 2) +
+            Math.pow(mouseUpPosition.y - this.mouseDownPosition.y, 2)
+        );
+
+        // Only treat as a "click" if mouse didn't move much (less than 5 pixels)
+        // This allows camera rotation when dragging but face selection when clicking
+        if (mouseMoveDistance < 5) {
+            this.onMouseClick(event);
+        }
+
+        this.mouseDownPosition = null;
     }
 
     onMouseClick(event) {
@@ -368,13 +439,15 @@ class ModelVisualizer {
         // Update raycaster
         this.raycaster.setFromCamera(this.mouse, this.camera);
 
-        // Find intersections
+        // Find intersections with the model
         const intersects = this.raycaster.intersectObject(this.currentModel, true);
 
         if (intersects.length > 0) {
+            // Clicked on the object - select face
             const intersection = intersects[0];
             this.selectFace(intersection);
         }
+        // If no intersections, we clicked in empty space - camera rotation is handled by OrbitControls
     }
 
     selectFace(intersection) {
@@ -403,11 +476,11 @@ class ModelVisualizer {
         const geometry = mesh.geometry.clone();
         const colors = new Float32Array(geometry.attributes.position.count * 3);
 
-        // Set all vertices to original color (gray)
+        // Set all vertices to original color (white)
         for (let i = 0; i < colors.length; i += 3) {
-            colors[i] = 0.5;     // R
-            colors[i + 1] = 0.5; // G
-            colors[i + 2] = 0.5; // B
+            colors[i] = 1.0;     // R
+            colors[i + 1] = 1.0; // G
+            colors[i + 2] = 1.0; // B
         }
 
         // Highlight the selected face (orange)
@@ -457,6 +530,14 @@ class ModelVisualizer {
             // Dispose of geometries and materials
             this.currentModel.traverse((child) => {
                 if (child.isMesh) {
+                    // Clean up wireframe if it exists
+                    if (child.userData.wireframe) {
+                        child.remove(child.userData.wireframe);
+                        child.userData.wireframe.geometry.dispose();
+                        child.userData.wireframe.material.dispose();
+                        delete child.userData.wireframe;
+                    }
+                    
                     if (child.geometry) child.geometry.dispose();
                     if (child.material) {
                         if (Array.isArray(child.material)) {
