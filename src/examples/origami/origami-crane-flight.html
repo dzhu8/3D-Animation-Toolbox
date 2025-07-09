@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Origami Crane - Animation Control v14</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #container {
+            width: 100vw;
+            height: 100vh;
+            cursor: default;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 100;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            min-width: 250px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        #controls h3 {
+            color: white;
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            text-align: center;
+        }
+        
+        .control-section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .control-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        .control-section h4 {
+            color: #4CAF50;
+            margin: 0 0 10px 0;
+            font-size: 14px;
+        }
+        
+        .control-button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background: #4CAF50;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            margin: 3px 0;
+            display: block;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+        
+        .control-button:hover {
+            background: #45a049;
+        }
+        
+        .control-button:active {
+            background: #3d8b40;
+        }
+        
+        .control-button.stop {
+            background: #f44336;
+        }
+        
+        .control-button.stop:hover {
+            background: #da190b;
+        }
+        
+        .control-button.primary {
+            background: #2196f3;
+            font-weight: bold;
+        }
+        
+        .control-button.primary:hover {
+            background: #1976d2;
+        }
+        
+        .control-button.secondary {
+            background: #ff9800;
+        }
+        
+        .control-button.secondary:hover {
+            background: #e68900;
+        }
+        
+        .control-button.wing-flap {
+            background: #ff5722;
+        }
+        
+        .control-button.wing-flap:hover {
+            background: #e64a19;
+        }
+        
+        .control-button.wing-flap.active {
+            background: #4caf50;
+        }
+        
+        .control-button.wing-flap.active:hover {
+            background: #45a049;
+        }
+        
+        .control-button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        
+        .crane-controls {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            margin: 10px 0;
+        }
+        
+        .crane-controls button {
+            flex: 0 0 auto;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .crane-controls input {
+            flex: 1;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 12px;
+        }
+        
+        .speed-control {
+            margin: 10px 0;
+        }
+        
+        .speed-control label {
+            color: white;
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        
+        .speed-control input[type="range"] {
+            width: 100%;
+            margin: 5px 0;
+        }
+        
+        .speed-value {
+            color: #4CAF50;
+            font-weight: bold;
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        .toggle-buttons {
+            display: flex;
+            gap: 5px;
+            margin: 10px 0;
+        }
+        
+        .toggle-buttons .control-button {
+            flex: 1;
+            margin: 0;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+            display: block;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .compass-legend {
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        
+        .compass-item {
+            display: flex;
+            align-items: center;
+            margin: 4px 0;
+        }
+        
+        .compass-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .red-dot {
+            background-color: #ff0000;
+        }
+        
+        .green-dot {
+            background-color: #00ff00;
+        }
+        
+        .blue-dot {
+            background-color: #0000ff;
+        }
+        
+        .status-text {
+            color: #90caf9;
+            font-size: 11px;
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(33, 150, 243, 0.2);
+            border: 1px solid rgba(33, 150, 243, 0.5);
+            border-radius: 4px;
+            text-align: center;
+        }
+        
+        /* Compass Styles */
+        #compass {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 80px;
+            height: 80px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .compass-arm {
+            position: absolute;
+            background: #4CAF50;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+        }
+        
+        .compass-arm:hover {
+            background: #45a049;
+            transform: scale(1.1);
+            z-index: 101;
+        }
+        
+        .compass-arm.x-pos {
+            width: 30px;
+            height: 8px;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            border-radius: 0 4px 4px 0;
+            background: #f44336;
+        }
+        
+        .compass-arm.x-pos:hover {
+            background: #d32f2f;
+        }
+        
+        .compass-arm.x-neg {
+            width: 30px;
+            height: 8px;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            border-radius: 4px 0 0 4px;
+            background: #ff9800;
+        }
+        
+        .compass-arm.x-neg:hover {
+            background: #f57c00;
+        }
+        
+        .compass-arm.y-pos {
+            width: 8px;
+            height: 30px;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 4px 4px 0 0;
+            background: #4caf50;
+        }
+        
+        .compass-arm.y-pos:hover {
+            background: #388e3c;
+        }
+        
+        .compass-arm.y-neg {
+            width: 8px;
+            height: 30px;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 0 0 4px 4px;
+            background: #2196f3;
+        }
+        
+        .compass-arm.y-neg:hover {
+            background: #1976d2;
+        }
+        
+        .compass-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 16px;
+            height: 16px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            border: 2px solid rgba(0, 0, 0, 0.3);
+        }
+        
+        #camera-reset {
+            position: absolute;
+            bottom: 110px;
+            left: 20px;
+            z-index: 100;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s ease;
+        }
+        
+        #camera-reset:hover {
+            background: rgba(0, 0, 0, 0.9);
+            border-color: #4CAF50;
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "../../build/three.module.js",
+                "three/addons/": "../../jsm/"
+            }
+        }
+    </script>
+
+    <div id="container"></div>
+    
+    <!-- Compass Navigation -->
+    <div id="compass">
+        <div class="compass-arm x-pos" data-direction="x-pos" title="View from +X axis">+X</div>
+        <div class="compass-arm x-neg" data-direction="x-neg" title="View from -X axis">-X</div>
+        <div class="compass-arm y-pos" data-direction="y-pos" title="View from +Y axis">+Y</div>
+        <div class="compass-arm y-neg" data-direction="y-neg" title="View from -Y axis">-Y</div>
+        <div class="compass-center"></div>
+    </div>
+    
+    <!-- Camera Reset Button -->
+    <button id="camera-reset" title="Reset camera to default position">🎥 Reset View</button>
+    
+    <div id="controls">
+        <h3>🎮 Control Panel</h3>
+        
+        <div class="control-section">
+            <h4>🚀 Program Control</h4>
+            <button id="start-stop-button" class="control-button primary">Start Program</button>
+            <button id="new-paths-button" class="control-button secondary" disabled>🎲 New Random Paths</button>
+        </div>
+        
+        <div class="control-section">
+            <h4>🕊️ Crane Management</h4>
+            <div class="crane-controls">
+                <button id="remove-crane-button" class="control-button" disabled>−</button>
+                <input type="number" id="crane-count-input" min="1" max="100" value="25" disabled>
+                <button id="add-crane-button" class="control-button" disabled>+</button>
+            </div>
+            <div class="toggle-buttons">
+                <button id="color-toggle-button" class="control-button" disabled>Make White</button>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h4>⚡ Animation Speed</h4>
+            <div class="speed-control">
+                <label for="speed-slider">Flight Speed:</label>
+                <input type="range" id="speed-slider" min="0.1" max="5.0" step="0.1" value="1.0">
+                <div class="speed-value">Speed: <span id="speed-value">1.0x</span></div>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h4>🦅 Wing Animation</h4>
+            <button id="wing-flap-button" class="control-button wing-flap" disabled>Start Wing Flap</button>
+            <div class="speed-control">
+                <label for="wing-speed-slider">Wing Speed:</label>
+                <input type="range" id="wing-speed-slider" min="0.1" max="3.0" step="0.1" value="1.0">
+                <div class="speed-value">Wing Speed: <span id="wing-speed-value">1.0x</span></div>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h4>📏 Crane Scale</h4>
+            <div class="speed-control">
+                <label for="scale-slider">Crane Size:</label>
+                <input type="range" id="scale-slider" min="0.25" max="1.5" step="0.05" value="1.0">
+                <div class="speed-value">Scale: <span id="scale-value">2.0x</span></div>
+            </div>
+        </div>
+        
+        <div class="status-text">
+            Program stopped. Click "Start Program" to begin.
+        </div>
+    </div>
+    
+    <div id="loading">Loading 3D environment and crane model...</div>
+
+    <!-- Load our custom origami move test v15 script as ES6 module -->
+    <script type="module" src="../../js/origami/origami-move-test-v15.js"></script>
+</body>
+</html>
